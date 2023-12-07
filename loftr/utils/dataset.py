@@ -1,18 +1,13 @@
 import io
-from loguru import logger
 
 import cv2
+import mindspore as ms
 import numpy as np
 import h5py
-import torch
 from numpy.linalg import inv
 
 
-try:
-    # for internel use only
-    from .client import MEGADEPTH_CLIENT, SCANNET_CLIENT
-except Exception:
-    MEGADEPTH_CLIENT = SCANNET_CLIENT = None
+MEGADEPTH_CLIENT = SCANNET_CLIENT = None
 
 # --- DATA IO ---
 
@@ -111,7 +106,7 @@ def read_megadepth_gray(path, resize=None, df=None, padding=False, augment_fn=No
     w_new, h_new = get_divisible_wh(w_new, h_new, df)
 
     image = cv2.resize(image, (w_new, h_new))
-    scale = torch.tensor([w/w_new, h/h_new], dtype=torch.float)
+    scale = np.array([w/w_new, h/h_new])
 
     if padding:  # padding
         pad_to = max(h_new, w_new)
@@ -119,10 +114,8 @@ def read_megadepth_gray(path, resize=None, df=None, padding=False, augment_fn=No
     else:
         mask = None
 
-    image = torch.from_numpy(image).float()[None] / 255  # (h, w) -> (1, h, w) and normalized
-    mask = torch.from_numpy(mask)
-
-    return image, mask, scale
+    # (h, w) -> (1, h, w) and normalized
+    return image[None] / 255, ms.Tensor(mask), scale
 
 
 def read_megadepth_depth(path, pad_to=None):
@@ -132,7 +125,6 @@ def read_megadepth_depth(path, pad_to=None):
         depth = np.array(h5py.File(path, 'r')['depth'])
     if pad_to is not None:
         depth, _ = pad_bottom_right(depth, pad_to, ret_mask=False)
-    depth = torch.from_numpy(depth).float()  # (h, w)
     return depth
 
 
@@ -153,8 +145,7 @@ def read_scannet_gray(path, resize=(640, 480), augment_fn=None):
     image = cv2.resize(image, resize)
 
     # (h, w) -> (1, h, w) and normalized
-    image = torch.from_numpy(image).float()[None] / 255
-    return image
+    return image[None] / 255
 
 
 def read_scannet_depth(path):
@@ -163,7 +154,6 @@ def read_scannet_depth(path):
     else:
         depth = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
     depth = depth / 1000
-    depth = torch.from_numpy(depth).float()  # (h, w)
     return depth
 
 

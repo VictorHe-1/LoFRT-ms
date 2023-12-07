@@ -1,14 +1,14 @@
 import os.path as osp
 import numpy as np
-import torch
-import torch.nn.functional as F
-from torch.utils.data import Dataset
-from loguru import logger
+import mindspore as ms
+from mindspore import ops
+import logging
+logger = logging.getLogger("loftr.train")
 
-from src.utils.dataset import read_megadepth_gray, read_megadepth_depth
+from loftr.utils.dataset import read_megadepth_gray, read_megadepth_depth
 
 
-class MegaDepthDataset(Dataset):
+class MegaDepthDataset:
     def __init__(self,
                  root_dir,
                  npz_path,
@@ -86,16 +86,16 @@ class MegaDepthDataset(Dataset):
             depth1 = read_megadepth_depth(
                 osp.join(self.root_dir, self.scene_info['depth_paths'][idx1]), pad_to=self.depth_max_size)
         else:
-            depth0 = depth1 = torch.tensor([])
+            depth0 = depth1 = []
 
         # read intrinsics of original size
-        K_0 = torch.tensor(self.scene_info['intrinsics'][idx0].copy(), dtype=torch.float).reshape(3, 3)
-        K_1 = torch.tensor(self.scene_info['intrinsics'][idx1].copy(), dtype=torch.float).reshape(3, 3)
+        K_0 = np.array(self.scene_info['intrinsics'][idx0].copy()).reshape(3, 3)
+        K_1 = np.array(self.scene_info['intrinsics'][idx1].copy()).reshape(3, 3)
 
         # read and compute relative poses
         T0 = self.scene_info['poses'][idx0]
         T1 = self.scene_info['poses'][idx1]
-        T_0to1 = torch.tensor(np.matmul(T1, np.linalg.inv(T0)), dtype=torch.float)[:4, :4]  # (4, 4)
+        T_0to1 = np.matmul(T1, np.linalg.inv(T0))[:4, :4]  # (4, 4)
         T_1to0 = T_0to1.inverse()
 
         data = {
@@ -118,7 +118,7 @@ class MegaDepthDataset(Dataset):
         # for LoFTR training
         if mask0 is not None:  # img_padding is True
             if self.coarse_scale:
-                [ts_mask_0, ts_mask_1] = F.interpolate(torch.stack([mask0, mask1], dim=0)[None].float(),
+                [ts_mask_0, ts_mask_1] = ops.interpolate(ops.stack([mask0, mask1], axis=0)[None],
                                                        scale_factor=self.coarse_scale,
                                                        mode='nearest',
                                                        recompute_scale_factor=False)[0].bool()

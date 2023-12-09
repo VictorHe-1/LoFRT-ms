@@ -3,10 +3,9 @@ from typing import Dict
 from unicodedata import name
 
 import numpy as np
-import torch
-import torch.utils as utils
+import mindspore as ms
 from numpy.linalg import inv
-from src.utils.dataset import (
+from loftr.utils.dataset import (
     read_scannet_gray,
     read_scannet_depth,
     read_scannet_pose,
@@ -14,7 +13,7 @@ from src.utils.dataset import (
 )
 
 
-class ScanNetDataset(utils.data.Dataset):
+class ScanNetDataset:
     def __init__(self,
                  root_dir,
                  npz_path,
@@ -85,15 +84,14 @@ class ScanNetDataset(utils.data.Dataset):
             depth0 = read_scannet_depth(osp.join(self.root_dir, scene_name, 'depth', f'{stem_name_0}.png'))
             depth1 = read_scannet_depth(osp.join(self.root_dir, scene_name, 'depth', f'{stem_name_1}.png'))
         else:
-            depth0 = depth1 = torch.tensor([])
+            depth0 = depth1 = ms.Tensor([])
 
         # read the intrinsic of depthmap
-        K_0 = K_1 = torch.tensor(self.intrinsics[scene_name].copy(), dtype=torch.float).reshape(3, 3)
+        K_0 = K_1 = np.array(self.intrinsics[scene_name].copy()).reshape(3, 3)
 
         # read and compute relative poses
-        T_0to1 = torch.tensor(self._compute_rel_pose(scene_name, stem_name_0, stem_name_1),
-                              dtype=torch.float32)
-        T_1to0 = T_0to1.inverse()
+        T_0to1 = self._compute_rel_pose(scene_name, stem_name_0, stem_name_1)
+        T_1to0 = inv(T_0to1)
 
         data = {
             'image0': image0,   # (1, h, w)

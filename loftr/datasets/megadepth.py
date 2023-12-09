@@ -3,7 +3,7 @@ import numpy as np
 import mindspore as ms
 from mindspore import ops
 import logging
-logger = logging.getLogger("loftr.train")
+logger = logging.getLogger(__name__)
 
 from loftr.utils.dataset import read_megadepth_gray, read_megadepth_depth
 
@@ -96,7 +96,7 @@ class MegaDepthDataset:
         T0 = self.scene_info['poses'][idx0]
         T1 = self.scene_info['poses'][idx1]
         T_0to1 = np.matmul(T1, np.linalg.inv(T0))[:4, :4]  # (4, 4)
-        T_1to0 = T_0to1.inverse()
+        T_1to0 = np.linalg.inv(T_0to1)
 
         data = {
             'image0': image0,  # (1, h, w)

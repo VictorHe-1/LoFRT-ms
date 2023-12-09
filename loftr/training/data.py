@@ -1,38 +1,70 @@
 import os
 import math
 from collections import abc
-from loguru import logger
-from torch.utils.data.dataset import Dataset
 from tqdm import tqdm
 from os import path as osp
 from pathlib import Path
 from joblib import Parallel, delayed
+import logging
 
-import pytorch_lightning as pl
-from torch import distributed as dist
-from torch.utils.data import (
-    Dataset,
-    DataLoader,
-    ConcatDataset,
+from mindspore.dataset import (
     DistributedSampler,
-    RandomSampler,
-    dataloader
+    RandomSampler
 )
 
-from src.utils.augment import build_augmentor
-from src.utils.dataloader import get_local_split
-from src.utils.misc import tqdm_joblib
-from src.utils import comm
-from src.datasets.megadepth import MegaDepthDataset
-from src.datasets.scannet import ScanNetDataset
-from src.datasets.sampler import RandomConcatSampler
+from loftr.utils.augment import build_augmentor
+from loftr.utils.dataloader import get_local_split
+from loftr.utils.misc import tqdm_joblib
+from loftr.utils import comm
+from loftr.datasets.megadepth import MegaDepthDataset
+from loftr.datasets.scannet import ScanNetDataset
 
 
-class MultiSceneDataModule(pl.LightningDataModule):
+logger = logging.getLogger(__name__)
+
+'''
+Note that: we don't use RandomConcatSampler here
+because the RandomConcatSampler samples a subset of a ConcatDataset every epoch.
+Here we use the full dataset for every epoch.
+'''
+
+class ConcatDataset:
+    @staticmethod
+    def cumsum(sequence):
+        r, s = [], 0
+        for e in sequence:
+            l = len(e)
+            r.append(l + s)
+            s += l
+        return r
+
+    def __init__(self, datasets):
+        self.datasets = datasets
+        self.cumulative_sizes = self.cumsum(self.datasets)
+        self.sampler = None
+
+    def __len__(self):
+        return self.cumulative_sizes[-1]
+
+    def __getitem__(self, idx):
+        if idx < 0:
+            if -idx > len(self):
+                raise ValueError("absolute value of index should not exceed dataset length")
+            idx = len(self) + idx
+        dataset_idx = bisect.bisect_right(self.cumulative_sizes, idx)
+        if dataset_idx == 0:
+            sample_idx = idx
+        else:
+            sample_idx = idx - self.cumulative_sizes[dataset_idx - 1]
+        return self.datasets[dataset_idx][sample_idx]
+
+
+class MultiSceneDataModule:
     """ 
     For distributed training, each training process is assgined
     only a part of the training scenes to reduce memory overhead.
     """
+
     def __init__(self, args, config):
         super().__init__()
 
@@ -66,8 +98,8 @@ class MultiSceneDataModule(pl.LightningDataModule):
 
         # MegaDepth options
         self.mgdpt_img_resize = config.DATASET.MGDPT_IMG_RESIZE  # 840
-        self.mgdpt_img_pad = config.DATASET.MGDPT_IMG_PAD   # True
-        self.mgdpt_depth_pad = config.DATASET.MGDPT_DEPTH_PAD   # True
+        self.mgdpt_img_pad = config.DATASET.MGDPT_IMG_PAD  # True
+        self.mgdpt_depth_pad = config.DATASET.MGDPT_DEPTH_PAD  # True
         self.mgdpt_df = config.DATASET.MGDPT_DF  # 8
         self.coarse_scale = 1 / config.LOFTR.RESOLUTION[0]  # 0.125. for training loftr.
 
@@ -75,33 +107,42 @@ class MultiSceneDataModule(pl.LightningDataModule):
         self.train_loader_params = {
             'batch_size': args.batch_size,
             'num_workers': args.num_workers,
-            'pin_memory': getattr(args, 'pin_memory', True)
         }
         self.val_loader_params = {
             'batch_size': 1,
             'shuffle': False,
             'num_workers': args.num_workers,
-            'pin_memory': getattr(args, 'pin_memory', True)
         }
         self.test_loader_params = {
             'batch_size': 1,
             'shuffle': False,
             'num_workers': args.num_workers,
-            'pin_memory': True
         }
-        
+
         # 4. sampler
         self.data_sampler = config.TRAINER.DATA_SAMPLER
         self.n_samples_per_subset = config.TRAINER.N_SAMPLES_PER_SUBSET
         self.subset_replacement = config.TRAINER.SB_SUBSET_SAMPLE_REPLACEMENT
         self.shuffle = config.TRAINER.SB_SUBSET_SHUFFLE
         self.repeat = config.TRAINER.SB_REPEAT
-        
+
         # (optional) RandomSampler for debugging
 
         # misc configurations
         self.parallel_load_data = getattr(args, 'parallel_load_data', False)
         self.seed = config.TRAINER.SEED  # 66
+
+        # ms special
+        self.output_columns = config.DATASET.OUTPUT_COLUMNS  # added
+
+    def set_output_columns(self, column_names):
+        self.output_columns = column_names
+
+    def get_output_columns(self):
+        """
+        get the column names for the output tuple of __getitem__, required for data mapping in the next step
+        """
+        return self.output_columns
 
     def setup(self, stage=None):
         """
@@ -182,22 +223,22 @@ class MultiSceneDataModule(pl.LightningDataModule):
         else:
             local_npz_names = npz_names
         logger.info(f'[rank {self.rank}]: {len(local_npz_names)} scene(s) assigned.')
-        
+
         dataset_builder = self._build_concat_dataset_parallel \
-                            if self.parallel_load_data \
-                            else self._build_concat_dataset
+            if self.parallel_load_data \
+            else self._build_concat_dataset
         return dataset_builder(data_root, local_npz_names, split_npz_root, intri_path,
-                                mode=mode, min_overlap_score=min_overlap_score, pose_dir=pose_dir)
+                               mode=mode, min_overlap_score=min_overlap_score, pose_dir=pose_dir)
 
     def _build_concat_dataset(
-        self,
-        data_root,
-        npz_names,
-        npz_dir,
-        intrinsic_path,
-        mode,
-        min_overlap_score=0.,
-        pose_dir=None
+            self,
+            data_root,
+            npz_names,
+            npz_dir,
+            intrinsic_path,
+            mode,
+            min_overlap_score=0.,
+            pose_dir=None
     ):
         datasets = []
         augment_fn = self.augment_fn if mode == 'train' else None
@@ -232,17 +273,17 @@ class MultiSceneDataModule(pl.LightningDataModule):
                                      coarse_scale=self.coarse_scale))
             else:
                 raise NotImplementedError()
-        return ConcatDataset(datasets)
-    
+        return ConcatDataset(datasets)  # TODO: convert each item into GeneratorDataset and concat them.
+
     def _build_concat_dataset_parallel(
-        self,
-        data_root,
-        npz_names,
-        npz_dir,
-        intrinsic_path,
-        mode,
-        min_overlap_score=0.,
-        pose_dir=None,
+            self,
+            data_root,
+            npz_names,
+            npz_dir,
+            intrinsic_path,
+            mode,
+            min_overlap_score=0.,
+            pose_dir=None,
     ):
         augment_fn = self.augment_fn if mode == 'train' else None
         data_source = self.trainval_data_source if mode in ['train', 'val'] else self.test_data_source
@@ -283,38 +324,76 @@ class MultiSceneDataModule(pl.LightningDataModule):
                 raise ValueError(f'Unknown dataset: {data_source}')
         return ConcatDataset(datasets)
 
-    def train_dataloader(self):
+    def train_dataloader(self):  # TODO: to implement
         """ Build training dataloader for ScanNet / MegaDepth. """
         assert self.data_sampler in ['scene_balance']
-        logger.info(f'[rank:{self.rank}/{self.world_size}]: Train Sampler and DataLoader re-init (should not re-init between epochs!).')
+        logger.info(
+            f'[rank:{self.rank}/{self.world_size}]: Train Sampler and DataLoader re-init (should not re-init between epochs!).')
         if self.data_sampler == 'scene_balance':
-            sampler = RandomConcatSampler(self.train_dataset,
-                                          self.n_samples_per_subset,
-                                          self.subset_replacement,
-                                          self.shuffle, self.repeat, self.seed)
+            # sampler = RandomConcatSampler(self.train_dataset,
+            #                               self.n_samples_per_subset,
+            #                               self.subset_replacement,
+            #                               self.shuffle, self.repeat, self.seed)
+            raise NotImplementedError()
         else:
             sampler = None
-        dataloader = DataLoader(self.train_dataset, sampler=sampler, **self.train_loader_params)
-        return dataloader
-    
-    def val_dataloader(self):
+        # dataloader = DataLoader(self.train_dataset, sampler=sampler, **self.train_loader_params)
+        # print("self.train_loader_params = ", self.train_loader_params)
+        ds = ms.dataset.GeneratorDataset(
+            self.train_dataset,
+            column_names=self.output_columns,
+            num_parallel_workers=num_workers,
+            num_shards=num_shards,
+            shard_id=shard_id,
+            python_multiprocessing=True,  # keep True to improve performace for heavy computation.
+            max_rowsize=max_rowsize,
+            shuffle=loader_config["shuffle"],
+        )
+        return ds
+
+    def val_dataloader(self):  # TODO: to implement
         """ Build validation dataloader for ScanNet / MegaDepth. """
         logger.info(f'[rank:{self.rank}/{self.world_size}]: Val Sampler and DataLoader re-init.')
         if not isinstance(self.val_dataset, abc.Sequence):
-            sampler = DistributedSampler(self.val_dataset, shuffle=False)
-            return DataLoader(self.val_dataset, sampler=sampler, **self.val_loader_params)
+            sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
+            # DataLoader(self.val_dataset, sampler=sampler, **self.val_loader_params)
+            ds = ms.dataset.GeneratorDataset(
+                self.val_dataset,
+                sampler=sampler,
+                column_names=self.output_columns,
+                num_parallel_workers=num_workers,
+                num_shards=num_shards,
+                shard_id=shard_id,
+                python_multiprocessing=True,  # keep True to improve performace for heavy computation.
+                max_rowsize=max_rowsize,
+                shuffle=loader_config["shuffle"],
+            )
+            return ds
         else:
             dataloaders = []
             for dataset in self.val_dataset:
-                sampler = DistributedSampler(dataset, shuffle=False)
+                sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
                 dataloaders.append(DataLoader(dataset, sampler=sampler, **self.val_loader_params))
             return dataloaders
 
     def test_dataloader(self, *args, **kwargs):
         logger.info(f'[rank:{self.rank}/{self.world_size}]: Test Sampler and DataLoader re-init.')
-        sampler = DistributedSampler(self.test_dataset, shuffle=False)
-        return DataLoader(self.test_dataset, sampler=sampler, **self.test_loader_params)
+        # sampler = DistributedSampler(self.test_dataset, shuffle=False)
+        sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
+        # return DataLoader(self.test_dataset, sampler=sampler, **self.test_loader_params)
+        ds = ms.dataset.GeneratorDataset(
+            self.val_dataset,
+            sampler=sampler,
+            column_names=self.output_columns,
+            num_parallel_workers=num_workers,
+            num_shards=num_shards,
+            shard_id=shard_id,
+            python_multiprocessing=True,  # keep True to improve performace for heavy computation.
+            max_rowsize=max_rowsize,
+            shuffle=loader_config["shuffle"],
+        )
+        return ds
 
 
-def _build_dataset(dataset: Dataset, *args, **kwargs):
+def _build_dataset(dataset, *args, **kwargs):
     return dataset(*args, **kwargs)

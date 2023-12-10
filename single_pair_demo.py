@@ -6,11 +6,11 @@ import cv2
 import matplotlib.cm as cm
 import numpy as np
 
-from loftr.utils.plotting import make_matching_figure
+from src.utils.plotting import make_matching_figure
 
 
-from loftr.models import LoFTR, default_cfg
-from loftr.utils.timer import Timer
+from src.models import LoFTR, default_cfg
+from src.utils.timer import Timer
 
 
 def image_pad(img, pad_shape, coarse_scale=8):

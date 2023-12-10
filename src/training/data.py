@@ -12,12 +12,12 @@ from mindspore.dataset import (
     RandomSampler
 )
 
-from loftr.utils.augment import build_augmentor
-from loftr.utils.dataloader import get_local_split
-from loftr.utils.misc import tqdm_joblib
-from loftr.utils import comm
-from loftr.datasets.megadepth import MegaDepthDataset
-from loftr.datasets.scannet import ScanNetDataset
+from src.utils.augment import build_augmentor
+from src.utils.dataloader import get_local_split
+from src.utils.misc import tqdm_joblib
+from src.utils import comm
+from src.datasets.megadepth import MegaDepthDataset
+from src.datasets.scannet import ScanNetDataset
 
 
 logger = logging.getLogger(__name__)

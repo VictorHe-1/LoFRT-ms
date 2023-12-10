@@ -5,7 +5,7 @@ from mindspore import ops
 import logging
 logger = logging.getLogger(__name__)
 
-from loftr.utils.dataset import read_megadepth_gray, read_megadepth_depth
+from src.utils.dataset import read_megadepth_gray, read_megadepth_depth
 
 
 class MegaDepthDataset:

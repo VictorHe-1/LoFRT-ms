@@ -92,7 +92,7 @@ if __name__ == "__main__":
     pth_path = '/data1/detrgroup/zhouwuxing/projects/LoFTR/weights/outdoor_ds.ckpt'
     ms_pth_path = os.path.join('./models', "ms-outdoor_ds.ckpt")
 
-    from loftr.models import LoFTR, default_cfg
+    from src.models import LoFTR, default_cfg
 
     model = LoFTR(config=default_cfg)
 

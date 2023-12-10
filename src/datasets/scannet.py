@@ -5,7 +5,7 @@ from unicodedata import name
 import numpy as np
 import mindspore as ms
 from numpy.linalg import inv
-from loftr.utils.dataset import (
+from src.utils.dataset import (
     read_scannet_gray,
     read_scannet_depth,
     read_scannet_pose,

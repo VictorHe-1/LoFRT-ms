@@ -2,7 +2,7 @@ import numpy as np
 from numpy import load
 import os
 
-print("Please input your path to loftr indices: ", end='')
+print("Please input your path to megadepth indices: ", end='')
 PATH_TO_LOFTR = input()
 
 # change scene_info_0

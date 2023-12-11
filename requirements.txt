@@ -7,3 +7,4 @@ ipython
 jupyterlab
 matplotlib
 h5py
+joblib>=1.0.1

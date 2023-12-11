@@ -1,4 +1,9 @@
-yacs>=0.1.8
 opencv_python
-matplotlib
+yacs>=0.1.8
 tqdm
+autopep8
+pylint
+ipython
+jupyterlab
+matplotlib
+h5py

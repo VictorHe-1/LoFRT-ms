@@ -31,6 +31,7 @@ def init_group_params(params, weight_decay):
 def build_optimizer(
     params,
     config,
+    lr,
     nesterov: bool = False,
     filter_bias_and_bn: bool = True,
     loss_scale: float = 1.0,
@@ -62,7 +63,6 @@ def build_optimizer(
         Optimizer object
     """
     opt = config.TRAINER.OPTIMIZER
-    lr = config.TRAINER.TRUE_LR
     opt = opt.lower()
 
     if weight_decay and filter_bias_and_bn:

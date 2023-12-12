@@ -13,4 +13,12 @@ cfg.TRAINER.RANSAC_PIXEL_THR = 0.5
 
 cfg.TRAINER.OPTIMIZER = "adamw"
 cfg.TRAINER.ADAMW_DECAY = 0.1
+cfg.TRAINER.NUM_WORKERS = 4  # replace num_workers for command line
+cfg.TRAINER.ckpt_save_dir = './tmp_ckpt'  # replace num_workers for command line
 cfg.LOFTR.MATCH_COARSE.TRAIN_COARSE_PERCENT = 0.3
+
+# system config
+cfg.system.mode = 1  # 0 for graph mode, 1 for pynative mode in MindSpore
+cfg.system.distribute = False
+cfg.system.device_id = 0
+cfg.system.amp_level = 'O0'

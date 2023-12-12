@@ -1,4 +1,5 @@
 from yacs.config import CfgNode as CN
+
 _CN = CN()
 
 ##############  ↓  LoFTR Pipeline  ↓  ##############
@@ -62,7 +63,6 @@ _CN.LOFTR.LOSS.FINE_TYPE = 'l2_with_std'  # ['l2_with_std', 'l2']
 _CN.LOFTR.LOSS.FINE_WEIGHT = 1.0
 _CN.LOFTR.LOSS.FINE_CORRECT_THR = 1.0  # for filtering valid fine-level gts (some gt matches might fall out of the fine-level window)
 
-
 ##############  Dataset  ##############
 _CN.DATASET = CN()
 # 1. data config
@@ -76,14 +76,14 @@ _CN.DATASET.TRAIN_INTRINSIC_PATH = None
 _CN.DATASET.VAL_DATA_ROOT = None
 _CN.DATASET.VAL_POSE_ROOT = None  # (optional directory for poses)
 _CN.DATASET.VAL_NPZ_ROOT = None
-_CN.DATASET.VAL_LIST_PATH = None    # None if val data from all scenes are bundled into a single npz file
+_CN.DATASET.VAL_LIST_PATH = None  # None if val data from all scenes are bundled into a single npz file
 _CN.DATASET.VAL_INTRINSIC_PATH = None
 # testing
 _CN.DATASET.TEST_DATA_SOURCE = None
 _CN.DATASET.TEST_DATA_ROOT = None
 _CN.DATASET.TEST_POSE_ROOT = None  # (optional directory for poses)
 _CN.DATASET.TEST_NPZ_ROOT = None
-_CN.DATASET.TEST_LIST_PATH = None   # None if test data from all scenes are bundled into a single npz file
+_CN.DATASET.TEST_LIST_PATH = None  # None if test data from all scenes are bundled into a single npz file
 _CN.DATASET.TEST_INTRINSIC_PATH = None
 
 # 2. dataset config
@@ -119,7 +119,7 @@ _CN.TRAINER.WARMUP_STEP = 4800
 
 # learning rate scheduler
 _CN.TRAINER.SCHEDULER = 'MultiStepLR'  # [MultiStepLR, CosineAnnealing, ExponentialLR]
-_CN.TRAINER.SCHEDULER_INTERVAL = 'epoch'    # [epoch, step]
+_CN.TRAINER.SCHEDULER_INTERVAL = 'epoch'  # [epoch, step]
 _CN.TRAINER.MSLR_MILESTONES = [3, 6, 9, 12]  # MSLR: MultiStepLR
 _CN.TRAINER.MSLR_GAMMA = 0.5
 _CN.TRAINER.COSA_TMAX = 30  # COSA: CosineAnnealing
@@ -127,7 +127,7 @@ _CN.TRAINER.ELR_GAMMA = 0.999992  # ELR: ExponentialLR, this value for 'step' in
 
 # plotting related
 _CN.TRAINER.ENABLE_PLOTTING = True
-_CN.TRAINER.N_VAL_PAIRS_TO_PLOT = 32     # number of val/test paris for plotting
+_CN.TRAINER.N_VAL_PAIRS_TO_PLOT = 32  # number of val/test paris for plotting
 _CN.TRAINER.PLOT_MODE = 'evaluation'  # ['evaluation', 'confidence']
 _CN.TRAINER.PLOT_MATCHES_ALPHA = 'dynamic'
 
@@ -162,6 +162,15 @@ _CN.TRAINER.GRADIENT_CLIPPING = 0.5
 # Use of different seed values might affect the final training result, since not all data items
 # are used during training on ScanNet. (60M pairs of images sampled during traing from 230M pairs in total.)
 _CN.TRAINER.SEED = 66
+_CN.TRAINER.NUM_WORKERS = 2
+_CN.TRAINER.ckpt_save_dir = './tmp_ckpt'
+
+
+_CN.system = CN()
+_CN.system.mode = 1
+_CN.system.distribute = True
+_CN.system.device_id = 0
+_CN.system.amp_level = 'O2'
 
 
 def get_cfg_defaults():

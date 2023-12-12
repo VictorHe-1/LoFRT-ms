@@ -22,3 +22,4 @@ cfg.system.mode = 1  # 0 for graph mode, 1 for pynative mode in MindSpore
 cfg.system.distribute = False
 cfg.system.device_id = 0
 cfg.system.amp_level = 'O0'
+cfg.system.drop_overflow_update = False

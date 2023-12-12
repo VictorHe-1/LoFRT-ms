@@ -115,7 +115,7 @@ def read_megadepth_gray(path, resize=None, df=None, padding=False, augment_fn=No
         mask = None
 
     # (h, w) -> (1, h, w) and normalized
-    return image[None] / 255, ms.Tensor(mask), scale
+    return image[None] / 255, mask, scale
 
 
 def read_megadepth_depth(path, pad_to=None):

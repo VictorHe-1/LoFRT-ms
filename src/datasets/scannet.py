@@ -49,6 +49,27 @@ class ScanNetDataset:
         # for training LoFTR
         self.augment_fn = augment_fn if mode == 'train' else None
 
+        # ms special
+        self.init_output_columns()
+
+    def init_output_columns(self):
+        self.output_columns = [
+            'image0',
+            'depth0',
+            'image1',
+            'depth1',
+            'T_0to1',
+            'T_1to0',
+            'K0',
+            'K1',
+            'dataset_name',
+            'scene_id',
+            'pair_id',
+            'pair_names']
+
+    def get_output_columns(self):
+        return self.output_columns
+
     def __len__(self):
         return len(self.data_names)
 

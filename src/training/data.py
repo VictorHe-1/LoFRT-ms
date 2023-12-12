@@ -1,24 +1,23 @@
 import os
 import math
-from collections import abc
-from tqdm import tqdm
+import bisect
+import logging
 from os import path as osp
+from collections import abc
+
+from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
-import logging
-
 from mindspore.dataset import (
     DistributedSampler,
     RandomSampler
 )
+from mindspore.communication import get_group_size, get_rank
 
-from src.utils.augment import build_augmentor
 from src.utils.dataloader import get_local_split
 from src.utils.misc import tqdm_joblib
-from src.utils import comm
 from src.datasets.megadepth import MegaDepthDataset
 from src.datasets.scannet import ScanNetDataset
-
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ Note that: we don't use RandomConcatSampler here
 because the RandomConcatSampler samples a subset of a ConcatDataset every epoch.
 Here we use the full dataset for every epoch.
 '''
+
 
 class ConcatDataset:
     @staticmethod
@@ -39,9 +39,15 @@ class ConcatDataset:
         return r
 
     def __init__(self, datasets):
+        if len(datasets) == 0:
+            raise ValueError("datasets passed to ConcatDataset cannot be empty!")
         self.datasets = datasets
         self.cumulative_sizes = self.cumsum(self.datasets)
         self.sampler = None
+        self.output_columns = datasets[0].get_output_columns()
+
+    def get_output_columns(self):
+        return self.output_columns
 
     def __len__(self):
         return self.cumulative_sizes[-1]
@@ -94,7 +100,8 @@ class MultiSceneDataModule:
         # general options
         self.min_overlap_score_test = config.DATASET.MIN_OVERLAP_SCORE_TEST  # 0.4, omit data with overlap_score < min_overlap_score
         self.min_overlap_score_train = config.DATASET.MIN_OVERLAP_SCORE_TRAIN
-        self.augment_fn = build_augmentor(config.DATASET.AUGMENTATION_TYPE)  # None, options: [None, 'dark', 'mobile']
+        # self.augment_fn = build_augmentor(config.DATASET.AUGMENTATION_TYPE)  # None, options: [None, 'dark', 'mobile']
+        self.augment_fn = None
 
         # MegaDepth options
         self.mgdpt_img_resize = config.DATASET.MGDPT_IMG_RESIZE  # 840
@@ -105,18 +112,18 @@ class MultiSceneDataModule:
 
         # 3.loader parameters
         self.train_loader_params = {
-            'batch_size': args.batch_size,
-            'num_workers': args.num_workers,
+            'batch_size': args.batch_size,  # 1
+            'num_workers': config.TRAINER.NUM_WORKERS
         }
         self.val_loader_params = {
             'batch_size': 1,
             'shuffle': False,
-            'num_workers': args.num_workers,
+            'num_workers': config.TRAINER.NUM_WORKERS
         }
         self.test_loader_params = {
             'batch_size': 1,
             'shuffle': False,
-            'num_workers': args.num_workers,
+            'num_workers': config.TRAINER.NUM_WORKERS
         }
 
         # 4. sampler
@@ -131,20 +138,9 @@ class MultiSceneDataModule:
         # misc configurations
         self.parallel_load_data = getattr(args, 'parallel_load_data', False)
         self.seed = config.TRAINER.SEED  # 66
+        self.stage = None
 
-        # ms special
-        self.output_columns = config.DATASET.OUTPUT_COLUMNS  # added
-
-    def set_output_columns(self, column_names):
-        self.output_columns = column_names
-
-    def get_output_columns(self):
-        """
-        get the column names for the output tuple of __getitem__, required for data mapping in the next step
-        """
-        return self.output_columns
-
-    def setup(self, stage=None):
+    def setup(self, stage=None, distribute=False):
         """
         Setup train / val / test dataset. This method will be called by PL automatically.
         Args:
@@ -152,15 +148,15 @@ class MultiSceneDataModule:
         """
 
         assert stage in ['fit', 'test'], "stage must be either fit or test"
-
-        try:
-            self.world_size = dist.get_world_size()
-            self.rank = dist.get_rank()
+        self.stage = stage
+        if distribute:
+            self.world_size = get_group_size()
+            self.rank = get_rank()
             logger.info(f"[rank:{self.rank}] world_size: {self.world_size}")
-        except AssertionError as ae:
+        else:
             self.world_size = 1
             self.rank = 0
-            logger.warning(str(ae) + " (set wolrd_size=1 and rank=0)")
+            logger.warning("set world_size=1 and rank=0")
 
         if stage == 'fit':
             self.train_dataset = self._setup_dataset(
@@ -292,7 +288,7 @@ class MultiSceneDataModule:
         with tqdm_joblib(tqdm(desc=f'[rank:{self.rank}] loading {mode} datasets',
                               total=len(npz_names), disable=int(self.rank) != 0)):
             if data_source == 'ScanNet':
-                datasets = Parallel(n_jobs=math.floor(len(os.sched_getaffinity(0)) * 0.9 / comm.get_local_size()))(
+                datasets = Parallel(n_jobs=math.floor(len(os.sched_getaffinity(0)) * 0.9 / get_group_size()))(
                     delayed(lambda x: _build_dataset(
                         ScanNetDataset,
                         data_root,
@@ -306,7 +302,7 @@ class MultiSceneDataModule:
             elif data_source == 'MegaDepth':
                 # TODO: _pickle.PicklingError: Could not pickle the task to send it to the workers.
                 raise NotImplementedError()
-                datasets = Parallel(n_jobs=math.floor(len(os.sched_getaffinity(0)) * 0.9 / comm.get_local_size()))(
+                datasets = Parallel(n_jobs=math.floor(len(os.sched_getaffinity(0)) * 0.9 / get_group_size()))(
                     delayed(lambda x: _build_dataset(
                         MegaDepthDataset,
                         data_root,
@@ -323,76 +319,6 @@ class MultiSceneDataModule:
             else:
                 raise ValueError(f'Unknown dataset: {data_source}')
         return ConcatDataset(datasets)
-
-    def train_dataloader(self):  # TODO: to implement
-        """ Build training dataloader for ScanNet / MegaDepth. """
-        assert self.data_sampler in ['scene_balance']
-        logger.info(
-            f'[rank:{self.rank}/{self.world_size}]: Train Sampler and DataLoader re-init (should not re-init between epochs!).')
-        if self.data_sampler == 'scene_balance':
-            # sampler = RandomConcatSampler(self.train_dataset,
-            #                               self.n_samples_per_subset,
-            #                               self.subset_replacement,
-            #                               self.shuffle, self.repeat, self.seed)
-            raise NotImplementedError()
-        else:
-            sampler = None
-        # dataloader = DataLoader(self.train_dataset, sampler=sampler, **self.train_loader_params)
-        # print("self.train_loader_params = ", self.train_loader_params)
-        ds = ms.dataset.GeneratorDataset(
-            self.train_dataset,
-            column_names=self.output_columns,
-            num_parallel_workers=num_workers,
-            num_shards=num_shards,
-            shard_id=shard_id,
-            python_multiprocessing=True,  # keep True to improve performace for heavy computation.
-            max_rowsize=max_rowsize,
-            shuffle=loader_config["shuffle"],
-        )
-        return ds
-
-    def val_dataloader(self):  # TODO: to implement
-        """ Build validation dataloader for ScanNet / MegaDepth. """
-        logger.info(f'[rank:{self.rank}/{self.world_size}]: Val Sampler and DataLoader re-init.')
-        if not isinstance(self.val_dataset, abc.Sequence):
-            sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
-            # DataLoader(self.val_dataset, sampler=sampler, **self.val_loader_params)
-            ds = ms.dataset.GeneratorDataset(
-                self.val_dataset,
-                sampler=sampler,
-                column_names=self.output_columns,
-                num_parallel_workers=num_workers,
-                num_shards=num_shards,
-                shard_id=shard_id,
-                python_multiprocessing=True,  # keep True to improve performace for heavy computation.
-                max_rowsize=max_rowsize,
-                shuffle=loader_config["shuffle"],
-            )
-            return ds
-        else:
-            dataloaders = []
-            for dataset in self.val_dataset:
-                sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
-                dataloaders.append(DataLoader(dataset, sampler=sampler, **self.val_loader_params))
-            return dataloaders
-
-    def test_dataloader(self, *args, **kwargs):
-        logger.info(f'[rank:{self.rank}/{self.world_size}]: Test Sampler and DataLoader re-init.')
-        # sampler = DistributedSampler(self.test_dataset, shuffle=False)
-        sampler = DistributedSampler(num_shards, shard_id, shuffle=False)
-        # return DataLoader(self.test_dataset, sampler=sampler, **self.test_loader_params)
-        ds = ms.dataset.GeneratorDataset(
-            self.val_dataset,
-            sampler=sampler,
-            column_names=self.output_columns,
-            num_parallel_workers=num_workers,
-            num_shards=num_shards,
-            shard_id=shard_id,
-            python_multiprocessing=True,  # keep True to improve performace for heavy computation.
-            max_rowsize=max_rowsize,
-            shuffle=loader_config["shuffle"],
-        )
-        return ds
 
 
 def _build_dataset(dataset, *args, **kwargs):

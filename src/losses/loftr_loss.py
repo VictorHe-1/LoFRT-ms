@@ -1,5 +1,5 @@
 import mindspore as ms
-from mindsporet import nn, ops
+from mindspore import nn, ops
 
 
 class LoFTRLoss(nn.Cell):

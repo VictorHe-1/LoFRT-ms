@@ -171,6 +171,7 @@ _CN.system.mode = 1
 _CN.system.distribute = True
 _CN.system.device_id = 0
 _CN.system.amp_level = 'O2'
+_CN.system.drop_overflow_update = False
 
 
 def get_cfg_defaults():

@@ -164,7 +164,7 @@ _CN.TRAINER.GRADIENT_CLIPPING = 0.5
 _CN.TRAINER.SEED = 66
 _CN.TRAINER.NUM_WORKERS = 2
 _CN.TRAINER.ckpt_save_dir = './tmp_ckpt'
-
+_CN.TRAINER.dataset_sink_mode = False
 
 _CN.system = CN()
 _CN.system.mode = 1
@@ -172,6 +172,8 @@ _CN.system.distribute = True
 _CN.system.device_id = 0
 _CN.system.amp_level = 'O2'
 _CN.system.drop_overflow_update = False
+_CN.system.val_interval = 1
+_CN.system.val_while_train = True
 
 
 def get_cfg_defaults():

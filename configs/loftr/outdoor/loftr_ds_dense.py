@@ -15,6 +15,7 @@ cfg.TRAINER.OPTIMIZER = "adamw"
 cfg.TRAINER.ADAMW_DECAY = 0.1
 cfg.TRAINER.NUM_WORKERS = 4  # replace num_workers for command line
 cfg.TRAINER.ckpt_save_dir = './tmp_ckpt'  # replace num_workers for command line
+cfg.TRAINER.dataset_sink_mode = False
 cfg.LOFTR.MATCH_COARSE.TRAIN_COARSE_PERCENT = 0.3
 
 # system config
@@ -23,3 +24,5 @@ cfg.system.distribute = False
 cfg.system.device_id = 0
 cfg.system.amp_level = 'O0'
 cfg.system.drop_overflow_update = False
+cfg.system.val_interval = 1
+cfg.system.val_while_train = True

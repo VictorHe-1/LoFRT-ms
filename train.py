@@ -19,15 +19,14 @@ from src.utils.logger import set_logger
 from src.utils.seed import set_seed
 from src.training.data import MultiSceneDataModule
 from src.training.data_builder import build_dataset
-# from mindauto.data import build_dataset
+from src.models import build_model
+from src.utils.loss_scaler import get_loss_scales
+from src.optimizers import build_optimizer, create_group_params
+from src.scheduler import build_scheduler
+from src.training.train_step_wrapper import TrainOneStepWrapper
+from src.utils.ema import EMA
+from src.utils.callbacks import EvalSaveCallback
 # from mindauto.metrics import build_metric
-# from mindauto.models import build_model
-# from mindauto.optim import create_group_params, create_optimizer
-# from mindauto.scheduler import create_scheduler
-# from mindauto.utils.callbacks import EvalSaveCallback, GetHistoryBEV
-# from mindauto.utils.ema import EMA
-# from mindauto.utils.loss_scaler import get_loss_scales
-# from mindauto.utils.train_step_wrapper import TrainOneStepWrapper
 
 logger = logging.getLogger("loftr.train")
 
@@ -127,15 +126,14 @@ def main():
     # create dataset
     data_module = MultiSceneDataModule(args, config)
     data_module.setup(stage='fit', distribute=config.system.distribute)
-    _, loader_train = build_dataset(
+    train_dataset, loader_train = build_dataset(
         data_module.train_dataset,
         data_module.train_loader_params,
         num_shards=device_num,
         shard_id=rank_id,
         is_train=True,
     )
-
-    _, loader_eval = build_dataset(
+    val_dataset, loader_eval = build_dataset(
         data_module.val_dataset,
         data_module.val_loader_params,
         num_shards=device_num,
@@ -143,57 +141,60 @@ def main():
         is_train=False,
         refine_batch_size=True
     )
-
     num_batches = loader_train.get_dataset_size()
+
     # create model
     amp_level = config.system.get("amp_level", "O0")
-    breakpoint()
-    network = build_model(cfg.model, ckpt_load_path=cfg.model.pop("pretrained", None),
+    network, loss = build_model(config, pretrained_ckpt=args.ckpt_path,
                           amp_level=amp_level)  # TODO: Load Model
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
-
     # get loss scale setting for mixed precision training
-    loss_scale_manager, optimizer_loss_scale = get_loss_scales(cfg)
-
+    loss_scale_manager, optimizer_loss_scale = get_loss_scales(config)
     # build lr scheduler
-    lr_scheduler = create_scheduler(num_batches, **cfg["scheduler"])
+    lr_scheduler = build_scheduler(num_batches,
+                                   config.TRAINER.SCHEDULER,
+                                   lr=config.TRAINER.TRUE_LR,
+                                   warmup_iters=config.TRAINER.WARMUP_STEP,
+                                   warmup_factor=config.TRAINER.WARMUP_RATIO,
+                                   decay_rate=config.TRAINER.MSLR_GAMMA,
+                                   milestones=config.TRAINER.MSLR_MILESTONES,
+                                   num_epochs=args.max_epochs)
     # build optimizer
-    # lr_scheduler: Dict
-    cfg.optimizer.update({"lr": lr_scheduler, "loss_scale": optimizer_loss_scale})
-    params = create_group_params(network.trainable_params(), **cfg.optimizer)
+    # cfg.optimizer.update({"lr": lr_scheduler, "loss_scale": optimizer_loss_scale})
+    params = create_group_params(network.trainable_params())  # TODO: currently no param grouping, confirm param grouping
 
     # this setting doesn't take effect, just keep it.
-    cfg.optimizer.update({"lr": eval(cfg.scheduler.lr)})
-    optimizer = create_optimizer(params, **cfg.optimizer)
-
+    optimizer = build_optimizer(params, config, lr_scheduler, filter_bias_and_bn=False)  # TODO: confirm filter_bias_and_bn
     # resume ckpt
     start_epoch = 0
     # build train step cell
-    gradient_accumulation_steps = cfg.train.get("gradient_accumulation_steps", 1)
-    clip_grad = cfg.train.get("clip_grad", False)
-    use_ema = cfg.train.get("ema", False)
-    ema = EMA(network, ema_decay=cfg.train.get("ema_decay", 0.9999), updates=0) if use_ema else None  # TODO
-
+    gradient_accumulation_steps = config.TRAINER.get("gradient_accumulation_steps", 1)
+    clip_grad = config.TRAINER.get("clip_grad", False)
+    use_ema = config.TRAINER.get("ema", False)
+    ema = EMA(network, ema_decay=config.TRAINER.get("ema_decay", 0.9999), updates=0) if use_ema else None
+    breakpoint()
     train_net = TrainOneStepWrapper(
         network,
         optimizer=optimizer,
         scale_sense=loss_scale_manager,
-        drop_overflow_update=cfg.system.drop_overflow_update,
+        drop_overflow_update=config.system.drop_overflow_update,
         gradient_accumulation_steps=gradient_accumulation_steps,
         clip_grad=clip_grad,
-        clip_norm=cfg.train.get("clip_norm", 1.0),
+        clip_norm=config.TRAINER.get("clip_norm", 1.0),
         ema=ema,
+        loss_fn=loss,
+        config=config,
+        data_cols=train_dataset.get_output_columns()
     )
-
+    breakpoint()
     # build postprocess and metric
     metric = None
-    if cfg.system.val_while_train:
+    if config.system.val_while_train:
         # postprocess network prediction
         metric = build_metric(cfg.metric, device_num=device_num)  # TODO: build metric
 
     # build callbacks
-    get_bev_cb = GetHistoryBEV()
     eval_cb = EvalSaveCallback(
         network,
         loader_eval,
@@ -201,59 +202,51 @@ def main():
         pred_cast_fp32=(amp_level != "O0"),
         rank_id=rank_id,
         device_num=device_num,
-        batch_size=cfg.train.loader.batch_size,
-        ckpt_save_dir=cfg.train.ckpt_save_dir,
-        main_indicator=cfg.metric.main_indicator,
+        batch_size=args.batch_size,
+        ckpt_save_dir=config.TRAINER.ckpt_save_dir,
+        main_indicator=cfg.metric.main_indicator,  # TODO
         ema=ema,
-        loader_output_columns=cfg.eval.dataset.output_columns,
-        input_indices=cfg.eval.dataset.pop("net_input_column_index", None),
-        label_indices=cfg.eval.dataset.pop("label_column_index", None),
-        meta_data_indices=cfg.eval.dataset.pop("meta_data_column_index", None),
-        val_interval=cfg.system.get("val_interval", 1),
-        val_start_epoch=cfg.system.get("val_start_epoch", 1),
-        log_interval=cfg.system.get("log_interval", 1),
-        ckpt_save_policy=cfg.system.get("ckpt_save_policy", "top_k"),
-        ckpt_max_keep=cfg.system.get("ckpt_max_keep", 10),
-        start_epoch=start_epoch,
+        loader_output_columns=val_dataset.get_output_columns(),
+        input_indices=cfg.eval.dataset.pop("net_input_column_index", None),  # TODO
+        label_indices=cfg.eval.dataset.pop("label_column_index", None),  # TODO
+        meta_data_indices=cfg.eval.dataset.pop("meta_data_column_index", None),  # TODO
+        val_interval=config.system.get("val_interval", 1),
+        val_start_epoch=config.system.get("val_start_epoch", 1),
+        log_interval=config.system.get("log_interval", 1),
+        ckpt_save_policy=config.system.get("ckpt_save_policy", "top_k"),
+        ckpt_max_keep=config.system.get("ckpt_max_keep", 10),
+        start_epoch=start_epoch
     )
-
-    # save args used for training
-    if rank_id in [None, 0]:
-        with open(os.path.join(cfg.train.ckpt_save_dir, "args.yaml"), "w") as f:
-            yaml.safe_dump(cfg.to_dict(), stream=f, default_flow_style=False, sort_keys=False)
 
     # log
     num_devices = device_num if device_num is not None else 1
-    global_batch_size = cfg.train.loader.batch_size * num_devices * gradient_accumulation_steps
-    model_name = (
-        cfg.model.type
-        if "type" in cfg.model
-        else f"{cfg.model.img_backbone.type}-{cfg.model.img_neck.type}-{cfg.model.pts_bbox_head.type}"
-    )
+    global_batch_size = args.batch_size * num_devices * gradient_accumulation_steps
+    model_name = "loFTR"
     info_seg = "=" * 40
+    weight_decay = config.TRAINER.get('ADAMW_DECAY',
+                                      config.TRAINER.get('ADAM_DECAY', 0))
     logger.info(
         f"\n{info_seg}\n"
-        f"Distribute: {cfg.system.distribute}\n"
+        f"Distribute: {config.system.distribute}\n"
         f"Model: {model_name}\n"
         f"Total number of parameters: {num_params}\n"
         f"Total number of trainable parameters: {num_trainable_params}\n"
-        f"Data root: {cfg.train.dataset.data_root}\n"
-        f"Optimizer: {cfg.optimizer.opt}\n"
-        f"Weight decay: {cfg.optimizer.weight_decay} \n"
-        f"Batch size: {cfg.train.loader.batch_size}\n"
+        f"Optimizer: {config.TRAINER.OPTIMIZER}\n"
+        f"Weight decay: {weight_decay} \n"
+        f"Batch size: {args.batch_size}\n"
         f"Num devices: {num_devices}\n"
         f"Gradient accumulation steps: {gradient_accumulation_steps}\n"
-        f"Global batch size: {cfg.train.loader.batch_size}x{num_devices}x{gradient_accumulation_steps}="
+        f"Global batch size: {args.batch_size}x{num_devices}x{gradient_accumulation_steps}="
         f"{global_batch_size}\n"
-        f"LR: {cfg.scheduler.lr} \n"
-        f"Scheduler: {cfg.scheduler.scheduler}\n"
+        f"LR: {config.TRAINER.TRUE_LR} \n"
+        f"Scheduler: {config.TRAINER.SCHEDULER}\n"
         f"Steps per epoch: {num_batches}\n"
-        f"Num epochs: {cfg.scheduler.num_epochs}\n"
+        f"Num epochs: {args.max_epochs}\n"
         f"Clip gradient: {clip_grad}\n"
         f"EMA: {use_ema}\n"
         f"AMP level: {amp_level}\n"
-        f"Loss scaler: {cfg.loss_scaler}\n"
-        f"Drop overflow update: {cfg.system.drop_overflow_update}\n"
+        f"Loss scaler: {config.get('loss_scaler', None)}\n"  # TODO
+        f"Drop overflow update: {config.system.drop_overflow_update}\n"
         f"{info_seg}\n"
         f"\nStart training... (The first epoch takes longer, please wait...)\n"
     )
@@ -262,10 +255,10 @@ def main():
     # training
     model = ms.Model(train_net)
     model.train(
-        cfg.scheduler.num_epochs,
+        args.max_epochs,
         loader_train,
-        callbacks=[get_bev_cb, eval_cb],
-        dataset_sink_mode=cfg.train.dataset_sink_mode,
+        callbacks=[eval_cb],
+        dataset_sink_mode=config.TRAINER.dataset_sink_mode,
         initial_epoch=start_epoch,
     )
 

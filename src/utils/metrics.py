@@ -1,10 +1,57 @@
-import torch
+import logging
+
+import mindspore as ms
+from mindspore import ops
 import cv2
 import numpy as np
 from collections import OrderedDict
-from loguru import logger
-from kornia.geometry.epipolar import numeric
-from kornia.geometry.conversions import convert_points_to_homogeneous
+
+_logger = logging.getLogger(__name__)
+
+
+def convert_points_to_homogeneous(points):
+    r"""Function that converts points from Euclidean to homogeneous space.
+
+    Args:
+        points: the points to be transformed with shape :math:`(*, N, D)`.
+
+    Returns:
+        the points in homogeneous coordinates :math:`(*, N, D+1)`.
+
+    Examples:
+        >>> input = tensor([[0., 0.]])
+        >>> convert_points_to_homogeneous(input)
+        tensor([[0., 0., 1.]])
+    """
+    if not isinstance(points, ms.Tensor):
+        raise TypeError(f"Input type is not a Tensor. Got {type(points)}")
+    if len(points.shape) < 2:
+        raise ValueError(f"Input must be at least a 2D tensor. Got {points.shape}")
+
+    return ops.pad(points, [0, 1], "constant", 1.0)
+
+
+def cross_product_matrix(x):
+    r"""Return the cross_product_matrix symmetric matrix of a vector.
+
+    Args:
+        x: The input vector to construct the matrix in the shape :math:`(*, 3)`.
+
+    Returns:
+        The constructed cross_product_matrix symmetric matrix with shape :math:`(*, 3, 3)`.
+    """
+    if not x.shape[-1] == 3:
+        raise AssertionError(x.shape)
+    # get vector compononens
+    x0 = x[..., 0]
+    x1 = x[..., 1]
+    x2 = x[..., 2]
+
+    # construct the matrix, reshape to 3x3 and return
+    zeros = ops.zeros_like(x0)
+    cross_product_matrix_flat = ops.stack([zeros, -x2, x1, x2, zeros, -x0, -x1, x0, zeros], axis=-1)
+    shape_ = x.shape[:-1] + (3, 3)
+    return cross_product_matrix_flat.view(*shape_)
 
 
 # --- METRICS ---
@@ -31,19 +78,20 @@ def symmetric_epipolar_distance(pts0, pts1, E, K0, K1):
     """Squared symmetric epipolar distance.
     This can be seen as a biased estimation of the reprojection error.
     Args:
-        pts0 (torch.Tensor): [N, 2]
-        E (torch.Tensor): [3, 3]
+        pts0 (ms.Tensor): [N, 2]
+        E (ms.Tensor): [3, 3]
     """
     pts0 = (pts0 - K0[[0, 1], [2, 2]][None]) / K0[[0, 1], [0, 1]][None]
     pts1 = (pts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
     pts0 = convert_points_to_homogeneous(pts0)
     pts1 = convert_points_to_homogeneous(pts1)
-
+    breakpoint()
     Ep0 = pts0 @ E.T  # [N, 3]
-    p1Ep0 = torch.sum(pts1 * Ep0, -1)  # [N,]
+    p1Ep0 = ops.sum(pts1 * Ep0, -1)  # [N,]
     Etp1 = pts1 @ E  # [N, 3]
-
+    breakpoint()
     d = p1Ep0**2 * (1.0 / (Ep0[:, 0]**2 + Ep0[:, 1]**2) + 1.0 / (Etp1[:, 0]**2 + Etp1[:, 1]**2))  # N
+    breakpoint()
     return d
 
 
@@ -52,7 +100,7 @@ def compute_symmetrical_epipolar_errors(data):
     Update:
         data (dict):{"epi_errs": [M]}
     """
-    Tx = numeric.cross_product_matrix(data['T_0to1'][:, :3, 3])
+    Tx = cross_product_matrix(data['T_0to1'][:, :3, 3])
     E_mat = Tx @ data['T_0to1'][:, :3, :3]
 
     m_bids = data['m_bids']
@@ -60,11 +108,11 @@ def compute_symmetrical_epipolar_errors(data):
     pts1 = data['mkpts1_f']
 
     epi_errs = []
-    for bs in range(Tx.size(0)):
+    for bs in range(Tx.shape[0]):
         mask = m_bids == bs
         epi_errs.append(
             symmetric_epipolar_distance(pts0[mask], pts1[mask], E_mat[bs], data['K0'][bs], data['K1'][bs]))
-    epi_errs = torch.cat(epi_errs, dim=0)
+    epi_errs = ops.cat(epi_errs, axis=0)
 
     data.update({'epi_errs': epi_errs})
 
@@ -111,12 +159,12 @@ def compute_pose_errors(data, config):
     conf = config.TRAINER.RANSAC_CONF  # 0.99999
     data.update({'R_errs': [], 't_errs': [], 'inliers': []})
 
-    m_bids = data['m_bids'].cpu().numpy()
-    pts0 = data['mkpts0_f'].cpu().numpy()
-    pts1 = data['mkpts1_f'].cpu().numpy()
-    K0 = data['K0'].cpu().numpy()
-    K1 = data['K1'].cpu().numpy()
-    T_0to1 = data['T_0to1'].cpu().numpy()
+    m_bids = data['m_bids'].asnumpy()
+    pts0 = data['mkpts0_f'].asnumpy()
+    pts1 = data['mkpts1_f'].asnumpy()
+    K0 = data['K0'].asnumpy()
+    K1 = data['K1'].asnumpy()
+    T_0to1 = data['T_0to1'].asnumpy()
 
     for bs in range(K0.shape[0]):
         mask = m_bids == bs
@@ -125,7 +173,7 @@ def compute_pose_errors(data, config):
         if ret is None:
             data['R_errs'].append(np.inf)
             data['t_errs'].append(np.inf)
-            data['inliers'].append(np.array([]).astype(np.bool))
+            data['inliers'].append(np.array([]).astype(bool))
         else:
             R, t, inliers = ret
             t_err, R_err = relative_pose_error(T_0to1[bs], R, t, ignore_gt_t_thr=0.0)
@@ -179,7 +227,7 @@ def aggregate_metrics(metrics, epi_err_thr=5e-4):
     # filter duplicates
     unq_ids = OrderedDict((iden, id) for id, iden in enumerate(metrics['identifiers']))
     unq_ids = list(unq_ids.values())
-    logger.info(f'Aggregating metrics over {len(unq_ids)} unique items...')
+    _logger.info(f'Aggregating metrics over {len(unq_ids)} unique items...')
 
     # pose auc
     angular_thresholds = [5, 10, 20]
@@ -191,3 +239,18 @@ def aggregate_metrics(metrics, epi_err_thr=5e-4):
     precs = epidist_prec(np.array(metrics['epi_errs'], dtype=object)[unq_ids], dist_thresholds, True)  # (prec@err_thr)
 
     return {**aucs, **precs}
+
+
+def compute_metrics(batch, config):
+    compute_symmetrical_epipolar_errors(batch)  # compute epi_errs for each match
+    compute_pose_errors(batch, config)  # compute R_errs, t_errs, pose_errs for each pair
+
+    rel_pair_names = list(zip(*batch['pair_names']))
+    bs = batch['image0'].shape[0]
+    metrics = {
+        'identifiers': ['#'.join(rel_pair_names[b]) for b in range(bs)],
+        'epi_errs': [batch['epi_errs'][batch['m_bids'] == b].asnumpy() for b in range(bs)],
+        'R_errs': batch['R_errs'],
+        't_errs': batch['t_errs'],
+        'inliers': batch['inliers']}
+    return metrics, rel_pair_names

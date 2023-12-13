@@ -104,9 +104,11 @@ class MegaDepthDataset:
             'scene_id',
             'pair_id',
             'pair_names_0',
-            'pair_names_1']
-        if self.mode in ['train', 'val']:
-            self.output_columns += ['mask0', 'mask1']
+            'pair_names_1',
+            'mask0',
+            'mask1']
+        # if self.mode in ['train', 'val']:
+        #     self.output_columns += ['mask0', 'mask1']
 
     def get_output_columns(self):
         return self.output_columns
@@ -160,4 +162,6 @@ class MegaDepthDataset:
         for idx, item in enumerate(data):
             if not isinstance(item, np.ndarray):
                 data[idx] = np.array(item)
+            if data[idx].dtype == np.float64:
+                data[idx] = data[idx].astype(np.float32)
         return tuple(data)

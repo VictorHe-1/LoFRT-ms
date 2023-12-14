@@ -31,19 +31,15 @@ class EvalSaveCallback(Callback):
             self,
             network,
             loader=None,
-            loss_fn=None,
-            metrics=None,
-            pred_cast_fp32=False,
+            config=None,
             rank_id=0,
             device_num=None,
             batch_size=20,
             ckpt_save_dir="./",
-            main_indicator="hmean",
+            main_indicator="auc@5",
             ema=None,
             loader_output_columns=[],
             input_indices=None,
-            label_indices=None,
-            meta_data_indices=None,
             val_interval=1,
             val_start_epoch=1,
             log_interval=1,
@@ -64,13 +60,9 @@ class EvalSaveCallback(Callback):
             self.net_evaluator = Evaluator(
                 network,
                 loader,
-                loss_fn,
-                metrics,
-                pred_cast_fp32=pred_cast_fp32,
                 loader_output_columns=loader_output_columns,
                 input_indices=input_indices,
-                label_indices=label_indices,
-                meta_data_indices=meta_data_indices,
+                config=config
             )
             self.main_indicator = main_indicator
             self.best_perf = -1e8

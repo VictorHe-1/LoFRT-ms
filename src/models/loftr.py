@@ -24,7 +24,7 @@ class LoFTR(nn.Cell):
         self.loftr_fine = LocalFeatureTransformer(config["fine"])
         self.fine_matching = FineMatching()
 
-    def construct(self, img0, img1, mask_c0, mask_c1):
+    def construct(self, img0, img1, mask_c0, mask_c1, scale0, scale1):
         """ 
         forward pass
         Args:
@@ -56,18 +56,21 @@ class LoFTR(nn.Cell):
 
         # padding mask, 0 for pad area
         mask_c0_flat, mask_c1_flat = mask_c0.flatten(start_dim=-2), mask_c1.flatten(start_dim=-2)  # (bs, c, hw)
-
         feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0_flat, mask_c1_flat)
-
         # Step3: match coarse-level
         match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1 = self.coarse_matching(feat_c0, feat_c1,
-                                                        hw_c0=hw_c0, hw_c1=hw_c1,
-                                                        hw_i0=hw_i0, hw_i1=hw_i1,
-                                                        mask_c0=mask_c0_flat,
-                                                        mask_c1=mask_c1_flat)
+                                                                                                hw_c0=hw_c0,
+                                                                                                hw_c1=hw_c1,
+                                                                                                hw_i0=hw_i0,
+                                                                                                hw_i1=hw_i1,
+                                                                                                mask_c0=mask_c0_flat,
+                                                                                                mask_c1=mask_c1_flat,
+                                                                                                scale_0=scale0,
+                                                                                                scale_1=scale1)
 
         # Step4: crop small patch of fine-feature-map centered at coarse feature map points
-        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, hw_c0, hw_f0, match_ids)
+        feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, hw_c0, hw_f0,
+                                                              match_ids)
 
         # Step4: fine-level self- and cross- attention
         feat_f0_unfold, feat_f1_unfold = self.loftr_fine_with_reshape(feat_f0_unfold, feat_f1_unfold)
@@ -75,13 +78,12 @@ class LoFTR(nn.Cell):
         # Step5: match fine-level
         match_kpts_f0, match_kpts_f1, normed_coord_std_f = self.fine_matching(feat_f0_unfold, feat_f1_unfold,
                                                                               match_kpts_c0, match_kpts_c1,
-                                                                              hw_i0, hw_f0)
+                                                                              hw_i0, hw_f0, scale1)
 
         if self.training:
             pass  # TODO check loss
         else:
-            return match_kpts_f0, match_kpts_f1, match_conf, match_masks, match_ids
-
+            return match_kpts_f0, match_kpts_f1, match_conf, match_masks
 
     def loftr_fine_with_reshape(self, feat_f0_unfold, feat_f1_unfold):
         bs, num_coarse_match, ww, c = feat_f0_unfold.shape
@@ -91,7 +93,6 @@ class LoFTR(nn.Cell):
         feat_f0_unfold = feat_f0_unfold.reshape(bs, num_coarse_match, ww, c)
         feat_f1_unfold = feat_f1_unfold.reshape(bs, num_coarse_match, ww, c)
         return feat_f0_unfold, feat_f1_unfold
-
 
     def load_state_dict(self, state_dict, *args, **kwargs):
         for k in list(state_dict.keys()):

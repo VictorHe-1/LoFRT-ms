@@ -51,8 +51,7 @@ def main():
     config = get_cfg_defaults()
     config.merge_from_file(args.main_cfg_path)
     config.merge_from_file(args.data_cfg_path)
-    ms.set_context(mode=config.system.mode, device_id=config.system.device_id, device_target='Ascend',
-                   pynative_synchronize=True)
+    ms.set_context(mode=config.system.mode, device_id=config.system.device_id, device_target='Ascend')
     device_num = 1
     rank_id = 0
 
@@ -106,13 +105,15 @@ def main():
     for in_data in tqdm(data_iterator, total=num_batches):
         batch_data = dict(zip(data_cols, in_data))
         model_input = []
-        for col in ['image0', 'image1', 'mask0', 'mask1']:
+        for col in ['image0', 'image1', 'mask0', 'mask1', 'scale0', 'scale1']:
             model_input.append(batch_data[col])
-        match_kpts_f0, match_kpts_f1, match_conf, match_masks, match_ids = network(*model_input)
-        # TODO: convert match_ids, get valid match kpts
-        batch_data['m_bids'] = match_ids
-        batch_data['mkpts0_f'] = match_kpts_f0.squeeze(0)
-        batch_data['mkpts1_f'] = match_kpts_f1.squeeze(0)
+        match_kpts_f0, match_kpts_f1, match_conf, match_masks = network(*model_input)
+        match_masks = match_masks.squeeze(0)
+        num_valid_match = match_masks.sum()
+        batch_data['m_bids'] = ms.Tensor([0 for _ in range(num_valid_match)], dtype=ms.int32)
+        batch_data['mkpts0_f'] = match_kpts_f0.squeeze(0)[:num_valid_match]
+        batch_data['mkpts1_f'] = match_kpts_f1.squeeze(0)[:num_valid_match]
+        batch_data['pair_names'] = [eval(str(batch_data['pair_names_0'])), eval(str(batch_data['pair_names_1']))]
         metrics_batch, _ = compute_metrics(batch_data, config)
         output_metrics.append(metrics_batch)
 

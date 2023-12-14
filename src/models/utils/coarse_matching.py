@@ -90,7 +90,7 @@ class CoarseMatching(nn.Cell):
         else:
             raise NotImplementedError()
 
-    def construct(self, feat_c0, feat_c1, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1):
+    def construct(self, feat_c0, feat_c1, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1):
         """
         Args:
             feat0 (ms.Tensor): [N, L, C]
@@ -128,10 +128,10 @@ class CoarseMatching(nn.Cell):
 
         # predict coarse matches from conf_matrix
         # TODO check no grad ?equals to stop_gradient
-        coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1,)
+        coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1)
         return coarse_matches
 
-    def get_coarse_match(self, conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1):
+    def get_coarse_match(self, conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1):
         """
         Args:
             conf_matrix (ms.Tensor): [N, L, S]
@@ -188,9 +188,10 @@ class CoarseMatching(nn.Cell):
         # scale = data['hw0_i'][0] / data['hw0_c'][0]
         # scale0 = scale * data['scale0'][b_ids] if 'scale0' in data else scale  # TODO check data[‘scale0’]
         # scale1 = scale * data['scale1'][b_ids] if 'scale1' in data else scale
-        scale0 = scale1 = hw_i0[0] / hw_c0[0]
-        mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale0  # (bs, l, 2) in (w, h) format
-        mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale1
+        scale = hw_i0[0] / hw_c0[0]
+        # scale_0[0] represents scale_0[b_id]
+        mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]  # (bs, l, 2) in (w, h) format
+        mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale * scale_1[0]
 
         # These matches is the current prediction (for visualization)
         # coarse_matches.update({

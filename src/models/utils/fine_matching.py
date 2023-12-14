@@ -90,7 +90,7 @@ class FineMatching(nn.Cell):
     def __init__(self):
         super().__init__()
 
-    def construct(self, feat_f0, feat_f1, match_kpts_c0, match_kpts_c1, hw_i0, hw_f0):
+    def construct(self, feat_f0, feat_f1, match_kpts_c0, match_kpts_c1, hw_i0, hw_f0, scale_1):
         """
         Args:
             feat0 (ms.Tensor): [bs, num_match, ww, c]
@@ -126,7 +126,7 @@ class FineMatching(nn.Cell):
         normed_coord_std_f = ops.cat([coords_normalized, std.unsqueeze(-1)], -1)  # (bs, num_match, 2)
 
         # compute absolute kpt coords
-        match_kpts_f1 = match_kpts_c1 + (coords_normalized * (w // 2) * scale)  # (bs, num_match, 2) TODO check length when training
+        match_kpts_f1 = match_kpts_c1 + (coords_normalized * (w // 2) * scale * scale_1[0])  # (bs, num_match, 2) TODO check length when training
 
         # TODO check no_grad ?equals to stop_gradient
         match_kpts_f0 = ops.stop_gradient(match_kpts_c0)  # the key points of the first image remains unchanged

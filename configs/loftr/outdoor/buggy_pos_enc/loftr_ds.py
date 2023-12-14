@@ -15,7 +15,7 @@ cfg.TRAINER.OPTIMIZER = "adamw"
 cfg.TRAINER.ADAMW_DECAY = 0.1
 cfg.LOFTR.MATCH_COARSE.TRAIN_COARSE_PERCENT = 0.3
 
-cfg.system.mode = 1  # 0 for graph mode, 1 for pynative mode in MindSpore
+cfg.system.mode = 0  # 0 for graph mode, 1 for pynative mode in MindSpore
 cfg.system.device_id = 2
 cfg.system.distribute = False
-cfg.system.amp_level = 'O0'
+cfg.system.amp_level = 'O2'

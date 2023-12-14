@@ -19,7 +19,6 @@ from src.training.data_builder import build_dataset
 from src.models import build_model
 from src.config.default import get_cfg_defaults
 from src.utils.metrics import compute_metrics, aggregate_metrics
-# from src.utils.metrics_numpy import compute_metrics
 from src.utils.misc import flattenList
 
 logger = logging.getLogger("loftr.test")
@@ -100,21 +99,11 @@ def main():
     network.set_train(False)
 
     # Infer
-    output_metrics = []
     num_batches = loader_test.get_dataset_size()
     data_cols = test_dataset.get_output_columns()
     data_iterator = loader_test.create_tuple_iterator(output_numpy=False, do_copy=False)
 
-    import pickle
-    with open('./debug/batch.pickle', 'rb') as file:
-        batch_data = pickle.load(file)
-    import numpy as np
-    for k,v in batch_data.items():
-        if k not in ['depth0', 'depth1'] and isinstance(v, np.ndarray):
-            batch_data[k] = ms.Tensor(v)
-    metrics_batch, _ = compute_metrics(batch_data, config)
-    breakpoint()
-
+    output_metrics = []
     for in_data in tqdm(data_iterator, total=num_batches):
         batch_data = dict(zip(data_cols, in_data))
         model_input = []
@@ -124,6 +113,7 @@ def main():
         batch_data['m_bids'] = match_ids
         batch_data['mkpts0_f'] = match_kpts_f0
         batch_data['mkpts1_f'] = match_kpts_f1
+        # TODO: convert match_ids
         metrics_batch, _ = compute_metrics(batch_data, config)
         output_metrics.append(metrics_batch)
 

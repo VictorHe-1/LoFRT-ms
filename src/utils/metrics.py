@@ -85,13 +85,10 @@ def symmetric_epipolar_distance(pts0, pts1, E, K0, K1):
     pts1 = (pts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
     pts0 = convert_points_to_homogeneous(pts0)
     pts1 = convert_points_to_homogeneous(pts1)
-    breakpoint()
     Ep0 = pts0 @ E.T  # [N, 3]
     p1Ep0 = ops.sum(pts1 * Ep0, -1)  # [N,]
     Etp1 = pts1 @ E  # [N, 3]
-    breakpoint()
     d = p1Ep0**2 * (1.0 / (Ep0[:, 0]**2 + Ep0[:, 1]**2) + 1.0 / (Etp1[:, 0]**2 + Etp1[:, 1]**2))  # N
-    breakpoint()
     return d
 
 

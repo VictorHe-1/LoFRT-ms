@@ -80,7 +80,7 @@ class LoFTR(nn.Cell):
         if self.training:
             pass  # TODO check loss
         else:
-            return match_kpts_f0, match_kpts_f1, match_conf, match_masks
+            return match_kpts_f0, match_kpts_f1, match_conf, match_masks, match_ids
 
 
     def loftr_fine_with_reshape(self, feat_f0_unfold, feat_f1_unfold):

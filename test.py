@@ -25,8 +25,6 @@ logger = logging.getLogger("loftr.test")
 
 
 def parse_args():
-    # init a costum parser which will be added into pl.Trainer parser
-    # check documentation: https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         'data_cfg_path', type=str, help='data config path')
@@ -53,7 +51,8 @@ def main():
     config = get_cfg_defaults()
     config.merge_from_file(args.main_cfg_path)
     config.merge_from_file(args.data_cfg_path)
-    ms.set_context(mode=config.system.mode, device_id=config.system.device_id, device_target='Ascend', pynative_synchronize=True)
+    ms.set_context(mode=config.system.mode, device_id=config.system.device_id, device_target='Ascend',
+                   pynative_synchronize=True)
     device_num = 1
     rank_id = 0
 
@@ -95,7 +94,7 @@ def main():
     # build model
     amp_level = config.system.get("amp_level", "O0")
     network, _ = build_model(config, pretrained_ckpt=args.ckpt_path,
-                          amp_level=amp_level)
+                             amp_level=amp_level)
     network.set_train(False)
 
     # Infer
@@ -110,10 +109,10 @@ def main():
         for col in ['image0', 'image1', 'mask0', 'mask1']:
             model_input.append(batch_data[col])
         match_kpts_f0, match_kpts_f1, match_conf, match_masks, match_ids = network(*model_input)
+        # TODO: convert match_ids, get valid match kpts
         batch_data['m_bids'] = match_ids
-        batch_data['mkpts0_f'] = match_kpts_f0
-        batch_data['mkpts1_f'] = match_kpts_f1
-        # TODO: convert match_ids
+        batch_data['mkpts0_f'] = match_kpts_f0.squeeze(0)
+        batch_data['mkpts1_f'] = match_kpts_f1.squeeze(0)
         metrics_batch, _ = compute_metrics(batch_data, config)
         output_metrics.append(metrics_batch)
 
@@ -121,7 +120,6 @@ def main():
     metrics = {k: flattenList([flattenList([_me[k] for _me in output_metrics])]) for k in output_metrics[0]}
     val_metrics_4tb = aggregate_metrics(metrics, config.TRAINER.EPI_ERR_THR)
     logger.info('\n' + pprint.pformat(val_metrics_4tb))
-
 
 
 if __name__ == '__main__':

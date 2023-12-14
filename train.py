@@ -197,7 +197,7 @@ def main():
         main_indicator=config.metrics.main_indicator,  # TODO
         ema=ema,
         loader_output_columns=val_dataset.get_output_columns(),
-        input_indices=[0, 2, 1, 3],  # img0, img1, mask_c0, mask_c1
+        input_indices=[0, 2, 1, 3, 8, 9],  # img0, img1, mask_c0, mask_c1, scale_0, scale_1
         val_interval=config.system.get("val_interval", 1),
         val_start_epoch=config.system.get("val_start_epoch", 1),
         log_interval=config.system.get("log_interval", 1),

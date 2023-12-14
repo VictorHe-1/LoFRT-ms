@@ -69,12 +69,14 @@ class Evaluator:
             else:
                 inputs = [data[0]]
 
-            match_kpts_f0, match_kpts_f1, match_conf, match_masks, match_ids = self.net(*inputs)
+            match_kpts_f0, match_kpts_f1, match_conf, match_masks = self.net(*inputs)
             batch_data = dict(zip(self.loader_output_columns, in_data))
-            # TODO: convert match_ids
-            batch_data['m_bids'] = match_ids
-            batch_data['mkpts0_f'] = match_kpts_f0.squeeze(0)
-            batch_data['mkpts1_f'] = match_kpts_f1.squeeze(0)
+            match_masks = match_masks.squeeze(0)
+            num_valid_match = match_masks.sum()
+            batch_data['m_bids'] = ms.Tensor([0 for _ in range(num_valid_match)], dtype=ms.int32)
+            batch_data['mkpts0_f'] = match_kpts_f0.squeeze(0)[:num_valid_match]
+            batch_data['mkpts1_f'] = match_kpts_f1.squeeze(0)[:num_valid_match]
+            batch_data['pair_names'] = [eval(str(batch_data['pair_names_0'])), eval(str(batch_data['pair_names_1']))]
             metrics_batch, _ = compute_metrics(batch_data, self.config)
             output_metrics.append(metrics_batch)
 

@@ -26,7 +26,6 @@ from src.scheduler import build_scheduler
 from src.training.train_step_wrapper import TrainOneStepWrapper
 from src.utils.ema import EMA
 from src.utils.callbacks import EvalSaveCallback
-# from mindauto.metrics import build_metric
 
 logger = logging.getLogger("loftr.train")
 
@@ -146,7 +145,7 @@ def main():
     # create model
     amp_level = config.system.get("amp_level", "O0")
     network, loss = build_model(config, pretrained_ckpt=args.ckpt_path,
-                          amp_level=amp_level)  # TODO: Load Model
+                          amp_level=amp_level)
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
     # get loss scale setting for mixed precision training
@@ -173,7 +172,6 @@ def main():
     clip_grad = config.TRAINER.get("clip_grad", False)
     use_ema = config.TRAINER.get("ema", False)
     ema = EMA(network, ema_decay=config.TRAINER.get("ema_decay", 0.9999), updates=0) if use_ema else None
-    breakpoint()
     train_net = TrainOneStepWrapper(
         network,
         optimizer=optimizer,
@@ -187,29 +185,19 @@ def main():
         config=config,
         data_cols=train_dataset.get_output_columns()
     )
-    breakpoint()
-    # build postprocess and metric
-    metric = None
-    if config.system.val_while_train:
-        # postprocess network prediction
-        metric = build_metric(cfg.metric, device_num=device_num)  # TODO: build metric
-
     # build callbacks
     eval_cb = EvalSaveCallback(
         network,
         loader_eval,
-        metrics=[metric],
-        pred_cast_fp32=(amp_level != "O0"),
+        config,
         rank_id=rank_id,
         device_num=device_num,
         batch_size=args.batch_size,
         ckpt_save_dir=config.TRAINER.ckpt_save_dir,
-        main_indicator=cfg.metric.main_indicator,  # TODO
+        main_indicator=config.metrics.main_indicator,  # TODO
         ema=ema,
         loader_output_columns=val_dataset.get_output_columns(),
-        input_indices=cfg.eval.dataset.pop("net_input_column_index", None),  # TODO
-        label_indices=cfg.eval.dataset.pop("label_column_index", None),  # TODO
-        meta_data_indices=cfg.eval.dataset.pop("meta_data_column_index", None),  # TODO
+        input_indices=[0, 2, 1, 3],  # img0, img1, mask_c0, mask_c1
         val_interval=config.system.get("val_interval", 1),
         val_start_epoch=config.system.get("val_start_epoch", 1),
         log_interval=config.system.get("log_interval", 1),
@@ -250,8 +238,6 @@ def main():
         f"{info_seg}\n"
         f"\nStart training... (The first epoch takes longer, please wait...)\n"
     )
-    # loader_iter = iter(loader_train)
-    # item = next(loader_iter)
     # training
     model = ms.Model(train_net)
     model.train(

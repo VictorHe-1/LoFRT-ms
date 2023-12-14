@@ -26,3 +26,5 @@ cfg.system.amp_level = 'O0'
 cfg.system.drop_overflow_update = False
 cfg.system.val_interval = 1
 cfg.system.val_while_train = True
+
+cfg.metrics.main_indicator = 'auc@5'

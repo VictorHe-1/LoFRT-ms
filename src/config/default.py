@@ -175,6 +175,9 @@ _CN.system.drop_overflow_update = False
 _CN.system.val_interval = 1
 _CN.system.val_while_train = True
 
+_CN.metrics = CN()
+_CN.metrics.main_indicator = 'auc@5'
+
 
 def get_cfg_defaults():
     """Get a yacs CfgNode object with default values for my_project."""

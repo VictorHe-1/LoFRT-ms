@@ -3,6 +3,7 @@ from mindspore import nn, ops
 
 INF = 1e9
 
+
 def mask_border(m, b: int, v):
     """ Mask borders with value
     Args:
@@ -50,7 +51,7 @@ def mask_border_with_padding(m, bd, p_m0, p_m1):
     bs = p_m0.shape[0]
 
     # (bs, 1, 1)  (bs, 1, 1)
-    w0s, h0s  = p_m0[:, 0].sum().view(bs, 1, 1), p_m0[:, :, 0].sum().view(bs, 1, 1)
+    w0s, h0s = p_m0[:, 0].sum().view(bs, 1, 1), p_m0[:, :, 0].sum().view(bs, 1, 1)
     w1s, h1s = p_m1[:, 0].sum().view(bs, 1, 1), p_m1[:, :, 0].sum().view(bs, 1, 1)
 
     h0_mask = ops.logical_and(ops.cumsum(p_m0, axis=1) <= h0s - bd, ops.cumsum(p_m0, axis=1) > bd)
@@ -90,6 +91,18 @@ class CoarseMatching(nn.Cell):
         else:
             raise NotImplementedError()
 
+    def compute_max_candidates(self, p_m0, p_m1):
+        """Compute the max candidates of all pairs within a batch
+
+        Args:
+            p_m0, p_m1 (torch.Tensor): padded masks
+        """
+        h0s, w0s = p_m0.sum(1).max(-1, return_indices=True)[0], p_m0.sum(-1).max(-1, return_indices=True)[0]
+        h1s, w1s = p_m1.sum(1).max(-1, return_indices=True)[0], p_m1.sum(-1).max(-1, return_indices=True)[0]
+        max_cand = ops.sum(
+            ops.min(ops.stack([h0s * w0s, h1s * w1s], axis=-1), axis=-1)[0])
+        return max_cand
+
     def construct(self, feat_c0, feat_c1, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1):
         """
         Args:
@@ -115,7 +128,7 @@ class CoarseMatching(nn.Cell):
         N, L, S, C = feat_c0.shape[0], feat_c0.shape[1], feat_c1.shape[1], feat_c0.shape[2]
 
         # normalize
-        feat_c0, feat_c1 = map(lambda feat: feat / feat.shape[-1]**.5, [feat_c0, feat_c1])
+        feat_c0, feat_c1 = map(lambda feat: feat / feat.shape[-1] ** .5, [feat_c0, feat_c1])
 
         if self.match_type == 'dual_softmax':
             sim_matrix = self.bmm(feat_c0, feat_c1) / self.temperature
@@ -128,7 +141,8 @@ class CoarseMatching(nn.Cell):
 
         # predict coarse matches from conf_matrix
         # TODO check no grad ?equals to stop_gradient
-        coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1)
+        coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0,
+                                               scale_1)
         return coarse_matches
 
     def get_coarse_match(self, conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0, scale_1):
@@ -146,8 +160,8 @@ class CoarseMatching(nn.Cell):
         # 2. safe margin
         mask = mask.view(bs, hw_c0[0], hw_c0[1], hw_c1[0], hw_c1[1])
         mask = mask_border_with_padding(mask, self.border_rm,
-                                 mask_c0.view(bs, hw_c0[0], hw_c0[1]),
-                                 mask_c1.view(bs, hw_c1[0], hw_c1[1])) # mask_c0, 0 for pad area
+                                        mask_c0.view(bs, hw_c0[0], hw_c0[1]),
+                                        mask_c1.view(bs, hw_c1[0], hw_c1[1]))  # mask_c0, 0 for pad area
         # mask_border = ops.logical_and(mask_c0[:, :, :, None, None], mask_c1[:, None, None, :, :])
         # mask = ops.logical_and(mask, mask_border)
         mask = mask.view(bs, l, s)
@@ -155,14 +169,14 @@ class CoarseMatching(nn.Cell):
         # 3. mutual nearest
         mask = mask.astype(ms.int32)
         mask = mask \
-            * (conf_matrix == ops.max(conf_matrix, axis=2, keepdims=True)[0]).astype(ms.int32) \
-            * (conf_matrix == ops.max(conf_matrix, axis=1, keepdims=True)[0]).astype(ms.int32)
+               * (conf_matrix == ops.max(conf_matrix, axis=2, keepdims=True)[0]).astype(ms.int32) \
+               * (conf_matrix == ops.max(conf_matrix, axis=1, keepdims=True)[0]).astype(ms.int32)
 
         # 4. find all valid coarse matches, Note that this only works when at most one `True` in each row
         mask_v, colum_ids = mask.max(2, return_indices=True)  # (bs, l)
         valids = ops.arange(l, dtype=ms.int32)
         invalids = ops.ones_like(valids) * l
-        row_ids = ops.where(mask_v.astype(ms.bool_), valids, invalids) # (bs, l)
+        row_ids = ops.where(mask_v.astype(ms.bool_), valids, invalids)  # (bs, l)
         # move the valid match to the front
         index = ops.argsort(row_ids.astype(ms.float32), axis=-1, descending=False)
         row_ids = ops.gather_elements(row_ids, dim=1, index=index)
@@ -177,12 +191,36 @@ class CoarseMatching(nn.Cell):
         conf_rows = ops.gather(conf_matrix, input_indices=row_ids, axis=1, batch_dims=1)
         match_conf = ops.gather_elements(conf_rows, dim=2, index=colum_ids.expand_dims(-1))[..., 0]
 
-
         # 4. Random sampling of training samples for fine-level LoFTR
         # (optional) pad samples with gt coarse-level matches
         if self.training:
-            # TODO add logic here
-            pass
+            num_candidates_max = int(self.compute_max_candidates(
+                mask_c0, mask_c1))
+            num_matches_train = int(num_candidates_max *
+                                    self.train_coarse_percent)
+            num_matches_pred = int(match_masks.squeeze(0).sum())
+            assert self.train_pad_num_gt_min < num_matches_train, "min-num-gt-pad should be less than num-train-matches"
+
+            if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
+                pred_indices = ops.arange(num_matches_pred)
+            else:
+                pred_indices = ops.randint(0,
+                                           num_matches_pred,
+                                           (num_matches_train - self.train_pad_num_gt_min,))
+                pred_mask_valid = [1 for _ in range(num_matches_train - self.train_pad_num_gt_min)] + \
+                                  [0 for _ in range(l - num_matches_train + self.train_pad_num_gt_min )]
+                pred_mask_valid = ms.Tensor([pred_mask_valid], dtype=ms.int32)
+                match_masks = ops.mul(match_masks.astype(ms.int32), pred_mask_valid)
+
+            gt_pad_indices = ops.randint(0,
+                                        len(spv_b_ids),
+                                        (max(num_matches_train - num_matches_pred,
+                                            self.train_pad_num_gt_min), ))
+            mconf_gt = ops.zeros(len(spv_b_ids))  # set conf of gt paddings to all zero
+
+            row_ids = ops.cat([row_ids[pred_indices], spv_i_ids[gt_pad_indices]], axis=0)
+            colum_ids = ops.cat([colum_ids[pred_indices], spv_j_ids[gt_pad_indices]], axis=0)
+            match_conf = ops.cat([match_conf[pred_indices], mconf_gt[gt_pad_indices]], axis=0)
 
         # 4. Update with matches in original image resolution
         # scale = data['hw0_i'][0] / data['hw0_c'][0]
@@ -190,7 +228,7 @@ class CoarseMatching(nn.Cell):
         # scale1 = scale * data['scale1'][b_ids] if 'scale1' in data else scale
         scale = hw_i0[0] / hw_c0[0]
         # scale_0[0] represents scale_0[b_id]
-        mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]  # (bs, l, 2) in (w, h) format
+        mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]
         mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale * scale_1[0]
 
         # These matches is the current prediction (for visualization)
@@ -210,8 +248,7 @@ class CoarseMatching(nn.Cell):
             mkpts_c1 = mkpts_c1[:, :self.num_max_match]
 
         return ops.stop_gradient(match_ids), \
-               ops.stop_gradient(match_masks), \
-               ops.stop_gradient(match_conf), \
-               ops.stop_gradient(mkpts_c0),\
-               ops.stop_gradient(mkpts_c1)
-
+            ops.stop_gradient(match_masks), \
+            ops.stop_gradient(match_conf), \
+            ops.stop_gradient(mkpts_c0), \
+            ops.stop_gradient(mkpts_c1)

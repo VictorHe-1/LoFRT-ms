@@ -27,14 +27,14 @@ def warp_kpts(kpts0, depth0, depth1, T_0to1, K0, K1):
 
     # Unproject
     kpts0_h = ops.cat([kpts0, ops.ones_like(kpts0[:, :, [0]])], axis=-1) * kpts0_depth[..., None]  # (N, L, 3)
-    kpts0_cam = ops.mm(K0.inverse(), kpts0_h.swapaxes(2, 1))  # (N, 3, L)
+    kpts0_cam = K0.inverse() @ kpts0_h.swapaxes(2, 1)  # (N, 3, L)
 
     # Rigid Transform
-    w_kpts0_cam = ops.mm(T_0to1[:, :3, :3], kpts0_cam) + T_0to1[:, :3, [3]]    # (N, 3, L)
+    w_kpts0_cam = T_0to1[:, :3, :3] @ kpts0_cam + T_0to1[:, :3, [3]]    # (N, 3, L)
     w_kpts0_depth_computed = w_kpts0_cam[:, 2, :]
 
     # Project
-    w_kpts0_h = ops.mm(K1, w_kpts0_cam).swapaxes(2, 1)  # (N, L, 3)
+    w_kpts0_h = (K1 @ w_kpts0_cam).swapaxes(2, 1)  # (N, L, 3)
     w_kpts0 = w_kpts0_h[:, :, :2] / (w_kpts0_h[:, :, [2]] + 1e-4)  # (N, L, 2), +1e-4 to avoid zero depth
 
     # Covisible Check

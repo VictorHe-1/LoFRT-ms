@@ -130,7 +130,6 @@ class MegaDepthDataset:
         image1, mask1, scale1 = read_megadepth_gray(
             img_name1, self.img_resize, self.df, self.img_padding, None)
         # np.random.choice([self.augment_fn, None], p=[0.5, 0.5]))
-
         # read depth. shape: (h, w)
         if self.mode in ['train', 'val']:
             depth0 = read_megadepth_depth(

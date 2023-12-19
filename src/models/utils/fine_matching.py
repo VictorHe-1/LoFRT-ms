@@ -123,7 +123,7 @@ class FineMatching(nn.Cell):
         std = ops.sum(ops.sqrt(ops.clamp(var, min=1e-10)), -1)  # (bs, num_match)  clamp needed for numerical stability
         
         # distribution (mean, std) for fine-level supervision
-        normed_coord_std_f = ops.cat([coords_normalized, std.unsqueeze(-1)], -1)  # (bs, num_match, 2)
+        expec_f = ops.cat([coords_normalized, std.unsqueeze(-1)], -1)  # (bs, num_match, 2)
 
         # compute absolute kpt coords
         match_kpts_f1 = match_kpts_c1 + (coords_normalized * (w // 2) * scale * scale_1[0])  # (bs, num_match, 2) TODO check length when training
@@ -132,4 +132,4 @@ class FineMatching(nn.Cell):
         match_kpts_f0 = ops.stop_gradient(match_kpts_c0)  # the key points of the first image remains unchanged
         match_kpts_f1 = ops.stop_gradient(match_kpts_f1)
 
-        return match_kpts_f0, match_kpts_f1, normed_coord_std_f
+        return match_kpts_f0, match_kpts_f1, expec_f

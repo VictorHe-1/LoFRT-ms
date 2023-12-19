@@ -89,11 +89,11 @@ def spvs_coarse(data, config, data_cols):
         - for megadepth dataset, there're 4 kinds of resolution {i, i_resize, c, f}
     """
     # 1. misc
-    N, _, H0, W0 = data[0].shape  # data_cols.index("image0")
-    _, _, H1, W1 = data[2].shape  # data_cols.index("image1")
+    N, _, H0, W0 = data[data_cols.index("image0")].shape  #
+    _, _, H1, W1 = data[data_cols.index("image1")].shape
     scale = config['LOFTR']['RESOLUTION'][0]
-    scale0 = scale * data[8][:, None]  # if 'scale0' in data_cols else scale  # 8
-    scale1 = scale * data[9][:, None]  # if 'scale1' in data_cols else scale  # 9
+    scale0 = scale * data[data_cols.index("scale0")][:, None] if 'scale0' in data_cols else scale  # 8
+    scale1 = scale * data[data_cols.index("scale1")][:, None] if 'scale1' in data_cols else scale  # 9
 
     h0 = H0 // scale
     w0 = W0 // scale
@@ -115,17 +115,17 @@ def spvs_coarse(data, config, data_cols):
     # (no depth consistency check, since it leads to worse results experimentally)
     # (unhandled edge case: points with 0-depth will be warped to the left-up corner)
     _, w_pt0_i = ops.stop_gradient(warp_kpts(grid_pt0_i,
-                                             data[1],  # 1 data_cols.index('depth0')
-                                             data[3],  # 3 data_cols.index('depth1')
-                                             data[4],  # 4 data_cols.index('T_0to1')
-                                             data[6],  # 6 data_cols.index('K0')
-                                             data[7]))  # 7 data_cols.index('K1')
+                                             data[data_cols.index('depth0')],  # 1 data_cols.index('depth0')
+                                             data[data_cols.index('depth1')],  # 3
+                                             data[data_cols.index('T_0to1')],  # 4
+                                             data[data_cols.index('K0')],  # 6
+                                             data[data_cols.index('K1')]))  # 7
     _, w_pt1_i = ops.stop_gradient(warp_kpts(grid_pt1_i,
-                                             data[3],  # 3 data_cols.index('depth1')
-                                             data[1],  # 1 data_cols.index('depth0')
-                                             data[4],  # 4 data_cols.index('T_1to0')
-                                             data[7],  # 7 data_cols.index('K1')
-                                             data[6]))  # 6 data_cols.index('K0')
+                                             data[data_cols.index('depth1')],  # 3
+                                             data[data_cols.index('depth0')],  # 1
+                                             data[data_cols.index('T_1to0')],  # 4
+                                             data[data_cols.index('K1')],
+                                             data[data_cols.index('K0')]))
     w_pt0_c = w_pt0_i / scale1
     w_pt1_c = w_pt1_i / scale0
     # 3. check if mutual nearest neighbor
@@ -152,25 +152,22 @@ def spvs_coarse(data, config, data_cols):
     # 4. construct a gt conf_matrix
     conf_matrix_gt = ops.zeros((N, h0 * w0, h1 * w1))
     correct_0to1 = correct_0to1.astype(ms.int16)
+
     # original codes:
-    # ids = ops.nonzero(correct_0to1 != 0).astype(ms.int32)
-    # b_ids, i_ids = ids[:, 0], ids[:, 1]
-    # j_ids = nearest_index1[b_ids, i_ids].astype(ms.int32)
-    # conf_matrix_gt[b_ids, i_ids, j_ids] = 1
+    ids = ops.nonzero(correct_0to1 != 0).astype(ms.int32)
+    b_ids, i_ids = ids[:, 0], ids[:, 1]
+    j_ids = nearest_index1[b_ids, i_ids].astype(ms.int32)
+    conf_matrix_gt[b_ids, i_ids, j_ids] = 1
+
 
     # new codes:
-    mask = ops.zeros_like(conf_matrix_gt)
-    ids_mask = (correct_0to1 != 0)
-    # i_ids = ms.Tensor(i_ids, dtype=ms.int32)
-    # j_ids = ms.Tensor(j_ids, dtype=ms.int32)
-    # b_ids = ms.Tensor(b_ids, dtype=ms.int32)
-    new_conf_matrix_gt = ops.where(mask.bool(), ops.ones_like(conf_matrix_gt), conf_matrix_gt)
-
+    # debug_gt = ops.zeros((N, h0 * w0, h1 * w1))
+    # indices = nearest_index1.unsqueeze(-1)
     # mask_correct_0to1 = (correct_0to1 != 0).astype(ms.int16)  # (1, 6400)
     # row_ids = mask_correct_0to1.unsqueeze(2).tile((1, 1, conf_matrix_gt.shape[1]))  # (1, 6400, 6400)
+    # new_conf_matrix_gt = row_ids * ops.tensor_scatter_elements(debug_gt, indices, ops.ones_like(indices), axis=2)
+
     # nearest_index1: (1, 6400)
-    #col_ids = nearest_index1[b_ids, i_ids]
-    # conf_matrix_gt[b_ids, i_ids, j_ids] = 1
     conf_matrix_gt = ops.stop_gradient(new_conf_matrix_gt)
     data.append(conf_matrix_gt)  # TODO: confirm data type
     data_cols.append("conf_matrix_gt")

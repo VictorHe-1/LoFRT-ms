@@ -11,8 +11,11 @@ _logger = logging.getLogger(__name__)
 
 def build_model(config, pretrained_ckpt=None, **kwargs):
     _config = lower_config(config)
-    model = LoFTR(config=_config['loftr'])
-    loss = LoFTRLoss(_config)
+    if 'training_mode' in kwargs:
+        loss = LoFTRLoss(_config)
+        model = LoFTR(config=_config['loftr'], loss=loss)
+    else:
+        model = LoFTR(config=_config['loftr'])
 
     if pretrained_ckpt:
         ms.load_checkpoint(pretrained_ckpt, model)
@@ -20,5 +23,4 @@ def build_model(config, pretrained_ckpt=None, **kwargs):
 
     if 'amp_level' in kwargs:
         auto_mixed_precision(model, amp_level=kwargs["amp_level"])
-        auto_mixed_precision(loss, amp_level=kwargs["amp_level"])
-    return model, loss
+    return model

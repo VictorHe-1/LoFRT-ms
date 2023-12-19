@@ -8,7 +8,7 @@ from .utils.fine_matching import FineMatching
 
 
 class LoFTR(nn.Cell):
-    def __init__(self, config):
+    def __init__(self, config, loss=None):
         super().__init__()
         # Misc
         self.config = config
@@ -23,8 +23,42 @@ class LoFTR(nn.Cell):
         self.fine_preprocess = FinePreprocess(config)
         self.loftr_fine = LocalFeatureTransformer(config["fine"])
         self.fine_matching = FineMatching()
+        self.loss = loss  # only needed for training
 
-    def construct(self, img0, img1, mask_c0, mask_c1, scale0, scale1):
+        # For compute supervision: spvs_fine
+        self.scale_spvs = config['resolution'][1]
+        self.radius_spvs = config['fine_window_size'] // 2
+
+    def compute_supervision_fine(self, scale1, spv_w_pt0_i, spv_pt1_i, match_ids):
+        w_pt0_i, pt1_i = spv_w_pt0_i, spv_pt1_i
+        scale = self.scale_spvs
+        radius = self.radius_spvs
+
+        # 2. get coarse prediction
+        # match_ids: [bs, l, 2]
+        i_ids, j_ids = match_ids[0][:, 0], match_ids[0][:, 1]
+        b_ids = ms.Tensor([0 for _ in range(match_ids.shape[1])], dtype=ms.int32)
+
+        # 3. compute gt
+        scale = scale * scale1[0]
+        # `expec_f_gt` might exceed the window, i.e. abs(*) > 1, which would be filtered later
+        expec_f_gt = (w_pt0_i[b_ids, i_ids] - pt1_i[b_ids, j_ids]) / scale / radius  # [M, 2]
+        return ops.stop_gradient(expec_f_gt)
+
+    def construct(self,
+                  img0,
+                  img1,
+                  mask_c0,
+                  mask_c1,
+                  scale0,
+                  scale1,
+                  conf_matrix_gt,
+                  spv_b_ids,
+                  spv_i_ids,
+                  spv_j_ids,
+                  spv_w_pt0_i,
+                  spv_pt1_i
+                  ):
         """ 
         forward pass
         Args:
@@ -32,7 +66,10 @@ class LoFTR(nn.Cell):
             image1: (ms.Tensor): (bs, 1, H, W)
             mask_c0: (ms.Tensor[bool]): (bs, H, W) False indicates a padded position
             mask_c1: (ms.Tensor): (bs, H, W)
-
+            scale0: (ms.Tensor): (bs, 2)
+            scale1: (ms.Tensor): (bs, 2)
+            # For training:
+            spv_b_ids, spv_i_ids, spv_j_ids
         """
         bs = img0.shape[0]
         hw_i0, hw_i1 = img0.shape[2:], img1.shape[2:]  # initial spatial shape of the image pair
@@ -58,15 +95,19 @@ class LoFTR(nn.Cell):
         mask_c0_flat, mask_c1_flat = mask_c0.flatten(start_dim=-2), mask_c1.flatten(start_dim=-2)  # (bs, c, hw)
         feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0_flat, mask_c1_flat)
         # Step3: match coarse-level
-        match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1 = self.coarse_matching(feat_c0, feat_c1,
-                                                                                                hw_c0=hw_c0,
-                                                                                                hw_c1=hw_c1,
-                                                                                                hw_i0=hw_i0,
-                                                                                                hw_i1=hw_i1,
-                                                                                                mask_c0=mask_c0_flat,
-                                                                                                mask_c1=mask_c1_flat,
-                                                                                                scale_0=scale0,
-                                                                                                scale_1=scale1)
+        match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1, conf_matrix = self.coarse_matching(feat_c0,
+                                                                                                            feat_c1,
+                                                                                                            hw_c0,
+                                                                                                            hw_c1,
+                                                                                                            hw_i0,
+                                                                                                            hw_i1,
+                                                                                                            mask_c0_flat,
+                                                                                                            mask_c1_flat,
+                                                                                                            scale0,
+                                                                                                            scale1,
+                                                                                                            spv_b_ids,
+                                                                                                            spv_i_ids,
+                                                                                                            spv_j_ids)
 
         # Step4: crop small patch of fine-feature-map centered at coarse feature map points
         feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, hw_c0, hw_f0,
@@ -76,12 +117,18 @@ class LoFTR(nn.Cell):
         feat_f0_unfold, feat_f1_unfold = self.loftr_fine_with_reshape(feat_f0_unfold, feat_f1_unfold)
 
         # Step5: match fine-level
-        match_kpts_f0, match_kpts_f1, normed_coord_std_f = self.fine_matching(feat_f0_unfold, feat_f1_unfold,
+        match_kpts_f0, match_kpts_f1, expec_f = self.fine_matching(feat_f0_unfold, feat_f1_unfold,
                                                                               match_kpts_c0, match_kpts_c1,
                                                                               hw_i0, hw_f0, scale1)
-
         if self.training:
-            pass  # TODO check loss
+            expec_f_gt = self.compute_supervision_fine(scale1, spv_w_pt0_i, spv_pt1_i, match_ids)
+            return self.loss(expec_f,
+                             expec_f_gt,
+                             mask_c0,
+                             mask_c1,
+                             conf_matrix,
+                             conf_matrix_gt,
+                             match_masks)
         else:
             return match_kpts_f0, match_kpts_f1, match_conf, match_masks
 

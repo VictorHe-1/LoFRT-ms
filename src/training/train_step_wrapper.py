@@ -7,7 +7,7 @@ from mindspore.ops import composite as C
 from mindspore.ops import functional as F
 from mindspore.ops import operations as P
 
-from src.models.utils.supervision import compute_supervision_coarse, compute_supervision_fine
+from src.models.utils.supervision import spvs_coarse
 
 _grad_scale = C.MultitypeFuncGraph("grad_scale")
 reciprocal = P.Reciprocal()
@@ -57,9 +57,9 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
         clip_grad=False,
         clip_norm=1.0,
         verbose=False,
-        loss_fn=None,
         config=None,
-        data_cols=None
+        data_cols=None,
+        input_idx=None
     ):
         super().__init__(network, optimizer, scale_sense)
         self.ema = ema
@@ -89,17 +89,16 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
 
         self.map = ops.Map()
         self.partial = ops.Partial()
-        self.loss_fn = loss_fn
         self.config = config
         self.data_cols = data_cols
+        self.input_idx = input_idx
 
     def construct(self, *inputs):
         # compute loss
         weights = self.weights
-        inputs, self.data_cols = compute_supervision_coarse(*inputs, self.config, self.data_cols)
-        outputs = self.network(*inputs)  # mini-batch loss
-        outputs, self.data_cols = compute_supervision_fine(outputs, self.config, self.data_cols)
-        loss = self.loss_fn(outputs)
+        inputs, self.data_cols = spvs_coarse(list(inputs), self.config, self.data_cols)
+        model_inputs = [inputs[idx] for idx in self.input_idx]
+        loss = self.network(*model_inputs)  # mini-batch loss
         scaling_sens = self.scale_sense
 
         # check loss overflow

@@ -144,8 +144,8 @@ def main():
 
     # create model
     amp_level = config.system.get("amp_level", "O0")
-    network, loss = build_model(config, pretrained_ckpt=args.ckpt_path,
-                          amp_level=amp_level)
+    network = build_model(config, pretrained_ckpt=args.ckpt_path,
+                          amp_level=amp_level, training_mode=True)
     num_params = sum([param.size for param in network.get_parameters()])
     num_trainable_params = sum([param.size for param in network.trainable_params()])
     # get loss scale setting for mixed precision training
@@ -164,7 +164,8 @@ def main():
     params = create_group_params(network.trainable_params())  # TODO: currently no param grouping, confirm param grouping
 
     # this setting doesn't take effect, just keep it.
-    optimizer = build_optimizer(params, config, lr_scheduler, filter_bias_and_bn=False)  # TODO: confirm filter_bias_and_bn
+    weight_decay = config.TRAINER.ADAMW_DECAY if config.TRAINER.ADAMW_DECAY else config.TRAINER.ADAM_DECAY
+    optimizer = build_optimizer(params, config, lr_scheduler, weight_decay=weight_decay, filter_bias_and_bn=False)  # TODO: confirm filter_bias_and_bn
     # resume ckpt
     start_epoch = 0
     # build train step cell
@@ -172,6 +173,10 @@ def main():
     clip_grad = config.TRAINER.get("clip_grad", False)
     use_ema = config.TRAINER.get("ema", False)
     ema = EMA(network, ema_decay=config.TRAINER.get("ema_decay", 0.9999), updates=0) if use_ema else None
+
+    # input_idx meaning:
+    # img0, img1, mask_c0, mask_c1, scale_0, scale_1,
+    # conf_matrix_gt, spv_w_pt0_i, spv_pt1_i, spv_b_ids, spv_i_ids, spv_j_ids,
     train_net = TrainOneStepWrapper(
         network,
         optimizer=optimizer,
@@ -181,10 +186,11 @@ def main():
         clip_grad=clip_grad,
         clip_norm=config.TRAINER.get("clip_norm", 1.0),
         ema=ema,
-        loss_fn=loss,
         config=config,
-        data_cols=train_dataset.get_output_columns()
+        data_cols=train_dataset.get_output_columns(),
+        input_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19, 20, 21, 22]
     )
+
     # build callbacks
     eval_cb = EvalSaveCallback(
         network,
@@ -194,10 +200,10 @@ def main():
         device_num=device_num,
         batch_size=args.batch_size,
         ckpt_save_dir=config.TRAINER.ckpt_save_dir,
-        main_indicator=config.metrics.main_indicator,  # TODO
+        main_indicator=config.metrics.main_indicator,
         ema=ema,
         loader_output_columns=val_dataset.get_output_columns(),
-        input_indices=[0, 2, 1, 3, 8, 9],  # img0, img1, mask_c0, mask_c1, scale_0, scale_1
+        input_indices=[0, 2, 15, 16, 8, 9],  # img0, img1, mask_c0, mask_c1, scale_0, scale_1
         val_interval=config.system.get("val_interval", 1),
         val_start_epoch=config.system.get("val_start_epoch", 1),
         log_interval=config.system.get("log_interval", 1),

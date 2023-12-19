@@ -32,6 +32,7 @@ def build_optimizer(
     params,
     config,
     lr,
+    weight_decay,
     nesterov: bool = False,
     filter_bias_and_bn: bool = True,
     loss_scale: float = 1.0,

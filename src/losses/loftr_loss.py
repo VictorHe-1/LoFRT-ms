@@ -9,13 +9,19 @@ class LoFTRLoss(nn.Cell):
         self.loss_config = config['loftr']['loss']
         self.match_type = self.config['loftr']['match_coarse']['match_type']
         self.sparse_spvs = self.config['loftr']['match_coarse']['sparse_spvs']
-        
+
         # coarse-level
         self.correct_thr = self.loss_config['fine_correct_thr']
         self.c_pos_w = self.loss_config['pos_weight']
         self.c_neg_w = self.loss_config['neg_weight']
         # fine-level
         self.fine_type = self.loss_config['fine_type']
+
+        self.coarse_weight = self.loss_config['coarse_weight']
+        self.fine_weight = self.loss_config['fine_weight']
+        self.coarse_type = self.loss_config['coarse_type']
+        self.focal_alpha = self.loss_config['focal_alpha']
+        self.focal_gamma = self.loss_config['focal_gamma']
 
     def compute_coarse_loss(self, conf, conf_gt, weight=None):
         """ Point-wise CE / Focal Loss with 0 / 1 confidence as gt.
@@ -37,25 +43,26 @@ class LoFTRLoss(nn.Cell):
             if weight is not None:
                 weight[0, 0, 0] = 0.
             c_neg_w = 0.
-
-        if self.loss_config['coarse_type'] == 'cross_entropy':
+        pos_mask = pos_mask.astype(ms.int32)
+        neg_mask = neg_mask.astype(ms.int32)
+        if self.coarse_type == 'cross_entropy':
             assert not self.sparse_spvs, 'Sparse Supervision for cross-entropy not implemented!'
-            conf = ops.clamp(conf, 1e-6, 1-1e-6)
+            conf = ops.clamp(conf, 1e-6, 1 - 1e-6)
             loss_pos = - ops.log(conf[pos_mask])
             loss_neg = - ops.log(1 - conf[neg_mask])
             if weight is not None:
                 loss_pos = loss_pos * weight[pos_mask]
                 loss_neg = loss_neg * weight[neg_mask]
             return c_pos_w * loss_pos.mean() + c_neg_w * loss_neg.mean()
-        elif self.loss_config['coarse_type'] == 'focal':
-            conf = ops.clamp(conf, 1e-6, 1-1e-6)
-            alpha = self.loss_config['focal_alpha']
-            gamma = self.loss_config['focal_gamma']
-            
-            if self.sparse_spvs:
+        elif self.coarse_type == 'focal':  # usually focal
+            conf = ops.clamp(conf, 1e-6, 1 - 1e-6)
+            alpha = self.focal_alpha
+            gamma = self.focal_gamma
+
+            if self.sparse_spvs:  # False
                 pos_conf = conf[:, :-1, :-1][pos_mask] \
-                            if self.match_type == 'sinkhorn' \
-                            else conf[pos_mask]
+                    if self.match_type == 'sinkhorn' \
+                    else conf[pos_mask]
                 loss_pos = - alpha * ops.pow(1 - pos_conf, gamma) * pos_conf.log()
                 # calculate losses for negative samples
                 if self.match_type == 'sinkhorn':
@@ -76,26 +83,26 @@ class LoFTRLoss(nn.Cell):
                         neg_w1 = (weight.sum(1) != 0)[neg1]
                         neg_mask = ops.cat([neg_w0, neg_w1], 0)
                         loss_neg = loss_neg[neg_mask]
-                
-                loss =  c_pos_w * loss_pos.mean() + c_neg_w * loss_neg.mean() \
-                            if self.match_type == 'sinkhorn' \
-                            else c_pos_w * loss_pos.mean()
+
+                loss = c_pos_w * loss_pos.mean() + c_neg_w * loss_neg.mean() \
+                    if self.match_type == 'sinkhorn' \
+                    else c_pos_w * loss_pos.mean()
                 return loss
                 # positive and negative elements occupy similar propotions. => more balanced loss weights needed
             else:  # dense supervision (in the case of match_type=='sinkhorn', the dustbin is not supervised.)
-                loss_pos = - alpha * ops.pow(1 - conf[pos_mask], gamma) * (conf[pos_mask]).log()
-                loss_neg = - alpha * ops.pow(conf[neg_mask], gamma) * (1 - conf[neg_mask]).log()
-                if weight is not None:
-                    loss_pos = loss_pos * weight[pos_mask]
-                    loss_neg = loss_neg * weight[neg_mask]
-                return c_pos_w * loss_pos.mean() + c_neg_w * loss_neg.mean()
+                loss_pos = - alpha * ops.pow(1 - conf, gamma) * (conf).log()
+                loss_neg = - alpha * ops.pow(conf, gamma) * (1 - conf).log()  ## problem
+                # if weight is not None:
+                loss_pos = loss_pos * weight * pos_mask
+                loss_neg = loss_neg * weight * neg_mask
+                return c_pos_w * (loss_pos.sum() / pos_mask.sum()) + c_neg_w * (loss_neg.sum() / neg_mask.sum())
                 # each negative element occupy a smaller propotion than positive elements. => higher negative loss weight needed
         else:
             raise ValueError('Unknown coarse loss: {type}'.format(type=self.loss_config['coarse_type']))
-        
-    def compute_fine_loss(self, expec_f, expec_f_gt):
-        if self.fine_type == 'l2_with_std':
-            return self._compute_fine_loss_l2_std(expec_f, expec_f_gt)
+
+    def compute_fine_loss(self, expec_f, expec_f_gt, match_masks):
+        if self.fine_type == 'l2_with_std':  # usually l2_with_std
+            return self._compute_fine_loss_l2_std(expec_f, expec_f_gt, match_masks)
         elif self.fine_type == 'l2':
             return self._compute_fine_loss_l2(expec_f, expec_f_gt)
         else:
@@ -116,7 +123,7 @@ class LoFTRLoss(nn.Cell):
         offset_l2 = ((expec_f_gt[correct_mask] - expec_f[correct_mask]) ** 2).sum(-1)
         return offset_l2.mean()
 
-    def _compute_fine_loss_l2_std(self, expec_f, expec_f_gt):
+    def _compute_fine_loss_l2_std(self, expec_f, expec_f_gt, match_masks):
         """
         Args:
             expec_f (ms.Tensor): [M, 3] <x, y, std>
@@ -124,16 +131,17 @@ class LoFTRLoss(nn.Cell):
         """
         # correct_mask tells you which pair to compute fine-loss
         correct_mask = ops.norm(expec_f_gt, ord=float('inf'), dim=1) < self.correct_thr
-
         # use std as weight that measures uncertainty
         std = expec_f[:, 2]
         inverse_std = 1. / ops.clamp(std, min=1e-10)
-        weight = (inverse_std / ops.mean(inverse_std)).detach()  # avoid minizing loss through increase std
-
+        weight = (inverse_std / ops.mean(inverse_std))  # avoid minizing loss through increase std
+        weight = ops.stop_gradient(weight)
         # corner case: no correct coarse match found
+        correct_mask = correct_mask.astype(ms.int32) * match_masks[0].astype(ms.int32)
+        correct_mask = correct_mask.bool()
         if not correct_mask.any():
             if self.training:  # this seldomly happen during training, since we pad prediction with gt
-                               # sometimes there is not coarse-level gt at all.
+                # sometimes there is not coarse-level gt at all.
                 correct_mask[0] = True
                 weight[0] = 0.
             else:
@@ -145,15 +153,25 @@ class LoFTRLoss(nn.Cell):
 
         return loss
 
-    def compute_c_weight(self, data):
+    def compute_c_weight(self, mask0, mask1):
         """ compute element-wise weights for computing coarse-level loss. """
-        if 'mask0' in data:
-            c_weight = (data['mask0'].flatten(start_dim=-2)[..., None] * data['mask1'].flatten(start_dim=-2)[:, None]).float()
+        mask0 = mask0.astype(ms.int32)
+        mask1 = mask1.astype(ms.int32)
+        if mask0 is not None:
+            c_weight = (mask0.flatten(start_dim=-2)[..., None] * mask1.flatten(start_dim=-2)[:, None]).float()
         else:
             c_weight = None
         return c_weight
 
-    def construct(self, data):
+    def construct(self,
+                  expec_f,
+                  expec_f_gt,
+                  mask0,
+                  mask1,
+                  conf_matrix,
+                  conf_matrix_gt,
+                  match_masks
+                  ):
         """
         Update:
             data (dict): update{
@@ -161,29 +179,27 @@ class LoFTRLoss(nn.Cell):
                 'loss_scalars' (dict): loss scalars for tensorboard_record
             }
         """
-        loss_scalars = {}
         # 0. compute element-wise loss weight
-        c_weight = self.compute_c_weight(data)
+        c_weight = self.compute_c_weight(mask0, mask1)
         c_weight = ops.stop_gradient(c_weight)
 
         # 1. coarse-level loss
+        if self.sparse_spvs and self.match_type == 'sinkhorn':
+            raise NotImplementedError()
+        match_weight1 = match_masks.unsqueeze(2).tile((1, 1, c_weight.shape[2])).astype(ms.int32)
+        match_weight2 = match_masks.unsqueeze(0).tile((1, c_weight.shape[1], 1)).astype(ms.int32)
+        c_weight = c_weight * match_weight1 * match_weight2
         loss_c = self.compute_coarse_loss(
-            data['conf_matrix_with_bin'] if self.sparse_spvs and self.match_type == 'sinkhorn' \
-                else data['conf_matrix'],
-            data['conf_matrix_gt'],
+            conf_matrix,
+            conf_matrix_gt,
             weight=c_weight)
-        loss = loss_c * self.loss_config['coarse_weight']
-        loss_scalars.update({"loss_c": loss_c})
+        loss = loss_c * self.coarse_weight
 
         # 2. fine-level loss
-        loss_f = self.compute_fine_loss(data['expec_f'], data['expec_f_gt'])
+        loss_f = self.compute_fine_loss(expec_f[0], expec_f_gt, match_masks)
         if loss_f is not None:
-            loss += loss_f * self.loss_config['fine_weight']
-            loss_scalars.update({"loss_f":  loss_f})
+            loss += loss_f * self.fine_weight
         else:
             assert self.training is False
-            loss_scalars.update({'loss_f': ms.Tensor(1.)})  # 1 is the upper bound
 
-        loss_scalars.update({'loss': loss})
-        data.update({"loss": loss, "loss_scalars": loss_scalars})
-        return data
+        return loss

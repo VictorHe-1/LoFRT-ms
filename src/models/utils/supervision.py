@@ -89,11 +89,11 @@ def spvs_coarse(data, config, data_cols):
         - for megadepth dataset, there're 4 kinds of resolution {i, i_resize, c, f}
     """
     # 1. misc
-    N, _, H0, W0 = data[data_cols.index("image0")].shape  #
-    _, _, H1, W1 = data[data_cols.index("image1")].shape
+    N, _, H0, W0 = data[0].shape  #
+    _, _, H1, W1 = data[2].shape
     scale = config['LOFTR']['RESOLUTION'][0]
-    scale0 = scale * data[data_cols.index("scale0")][:, None] if 'scale0' in data_cols else scale  # 8
-    scale1 = scale * data[data_cols.index("scale1")][:, None] if 'scale1' in data_cols else scale  # 9
+    scale0 = scale * data[8][:, None]  # if 'scale0' in data_cols else scale
+    scale1 = scale * data[9][:, None]  # if 'scale1' in data_cols else scale
 
     h0 = H0 // scale
     w0 = W0 // scale
@@ -115,17 +115,17 @@ def spvs_coarse(data, config, data_cols):
     # (no depth consistency check, since it leads to worse results experimentally)
     # (unhandled edge case: points with 0-depth will be warped to the left-up corner)
     _, w_pt0_i = ops.stop_gradient(warp_kpts(grid_pt0_i,
-                                             data[data_cols.index('depth0')],  # 1 data_cols.index('depth0')
-                                             data[data_cols.index('depth1')],  # 3
-                                             data[data_cols.index('T_0to1')],  # 4
-                                             data[data_cols.index('K0')],  # 6
-                                             data[data_cols.index('K1')]))  # 7
+                                             data[1],
+                                             data[3],
+                                             data[4],
+                                             data[6],
+                                             data[7]))
     _, w_pt1_i = ops.stop_gradient(warp_kpts(grid_pt1_i,
-                                             data[data_cols.index('depth1')],  # 3
-                                             data[data_cols.index('depth0')],  # 1
-                                             data[data_cols.index('T_1to0')],  # 4
-                                             data[data_cols.index('K1')],
-                                             data[data_cols.index('K0')]))
+                                             data[3],
+                                             data[1],
+                                             data[5],
+                                             data[7],
+                                             data[6]))
     w_pt0_c = w_pt0_i / scale1
     w_pt1_c = w_pt1_i / scale0
     # 3. check if mutual nearest neighbor
@@ -153,38 +153,22 @@ def spvs_coarse(data, config, data_cols):
     conf_matrix_gt = ops.zeros((N, h0 * w0, h1 * w1))
     correct_0to1 = correct_0to1.astype(ms.int16)
 
-    # original codes:
-    ids = ops.nonzero(correct_0to1 != 0).astype(ms.int32)
-    b_ids, i_ids = ids[:, 0], ids[:, 1]
-    j_ids = nearest_index1[b_ids, i_ids].astype(ms.int32)
-    conf_matrix_gt[b_ids, i_ids, j_ids] = 1
-
-
-    # new codes:
-    # debug_gt = ops.zeros((N, h0 * w0, h1 * w1))
-    # indices = nearest_index1.unsqueeze(-1)
-    # mask_correct_0to1 = (correct_0to1 != 0).astype(ms.int16)  # (1, 6400)
-    # row_ids = mask_correct_0to1.unsqueeze(2).tile((1, 1, conf_matrix_gt.shape[1]))  # (1, 6400, 6400)
-    # new_conf_matrix_gt = row_ids * ops.tensor_scatter_elements(debug_gt, indices, ops.ones_like(indices), axis=2)
+    # new codes: change dynamic shape
+    indices = nearest_index1.unsqueeze(-1)
+    mask_correct_0to1 = (correct_0to1 != 0).astype(ms.int16)  # (1, 6400)
+    row_ids = mask_correct_0to1.unsqueeze(2).tile((1, 1, conf_matrix_gt.shape[1]))  # (1, 6400, 6400)
+    new_conf_matrix_gt = row_ids * ops.tensor_scatter_elements(conf_matrix_gt, indices, ops.ones_like(indices).astype(conf_matrix_gt.dtype), axis=2)
 
     # nearest_index1: (1, 6400)
     conf_matrix_gt = ops.stop_gradient(new_conf_matrix_gt)
     data.append(conf_matrix_gt)  # TODO: confirm data type
     data_cols.append("conf_matrix_gt")
-    # data.update({'conf_matrix_gt': conf_matrix_gt})
 
 
     # 5. save coarse matches(gt) for training fine level
-    if len(b_ids) == 0:
-        data_pair = (data[data_cols.index('pair_names_0')], data[data_cols.index('pair_names_1')])
-        _logger.warning(f"No groundtruth coarse match found for: {data_pair}")
-        # this won't affect fine-level loss calculation
-        b_ids = Tensor([0], dtype=ms.int32)
-        i_ids = Tensor([0], dtype=ms.int32)
-        j_ids = Tensor([0], dtype=ms.int32)
-
-    data_cols.extend(['spv_b_ids', 'spv_i_ids', 'spv_j_ids', 'spv_w_pt0_i', 'spv_pt1_i'])
-    data.extend([b_ids, i_ids, j_ids, w_pt0_i, grid_pt1_i])
+    # 'spv_b_ids', 'spv_i_ids', 'spv_j_ids',
+    data_cols.extend(['spv_w_pt0_i', 'spv_pt1_i'])
+    data.extend([w_pt0_i, grid_pt1_i])
     return data, data_cols
 
 

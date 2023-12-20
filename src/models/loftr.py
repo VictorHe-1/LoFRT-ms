@@ -42,7 +42,9 @@ class LoFTR(nn.Cell):
         # 3. compute gt
         scale = scale * scale1[0]
         # `expec_f_gt` might exceed the window, i.e. abs(*) > 1, which would be filtered later
-        expec_f_gt = (w_pt0_i[b_ids, i_ids] - pt1_i[b_ids, j_ids]) / scale / radius  # [M, 2]
+        # w_pt0_i: (1, 6400, 2) pt1_i: (1, 6400, 2) b_ids: (6400,)
+        # expec_f_gt = (w_pt0_i[b_ids, i_ids] - pt1_i[b_ids, j_ids]) / scale / radius  # [M, 2]
+        expec_f_gt = (ops.gather(w_pt0_i, i_ids, axis=1).squeeze(0) - ops.gather(pt1_i, j_ids, axis=1).squeeze(0)) / scale / radius
         return ops.stop_gradient(expec_f_gt)
 
     def construct(self,
@@ -53,9 +55,6 @@ class LoFTR(nn.Cell):
                   scale0,
                   scale1,
                   conf_matrix_gt,
-                  spv_b_ids,
-                  spv_i_ids,
-                  spv_j_ids,
                   spv_w_pt0_i,
                   spv_pt1_i
                   ):
@@ -104,10 +103,7 @@ class LoFTR(nn.Cell):
                                                                                                             mask_c0_flat,
                                                                                                             mask_c1_flat,
                                                                                                             scale0,
-                                                                                                            scale1,
-                                                                                                            spv_b_ids,
-                                                                                                            spv_i_ids,
-                                                                                                            spv_j_ids)
+                                                                                                            scale1)
 
         # Step4: crop small patch of fine-feature-map centered at coarse feature map points
         feat_f0_unfold, feat_f1_unfold = self.fine_preprocess(feat_f0, feat_f1, feat_c0, feat_c1, hw_c0, hw_f0,

@@ -188,7 +188,7 @@ def main():
         ema=ema,
         config=config,
         data_cols=train_dataset.get_output_columns(),
-        input_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19, 20, 21, 22]
+        input_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19]
     )
 
     # build callbacks

@@ -113,10 +113,7 @@ class CoarseMatching(nn.Cell):
                   mask_c0,
                   mask_c1,
                   scale_0,
-                  scale_1,
-                  spv_b_ids,
-                  spv_i_ids,
-                  spv_j_ids
+                  scale_1
                   ):
         """
         Args:
@@ -156,7 +153,7 @@ class CoarseMatching(nn.Cell):
         # predict coarse matches from conf_matrix
         # TODO check no grad ?equals to stop_gradient
         coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0,
-                                               scale_1, spv_b_ids, spv_i_ids, spv_j_ids)
+                                               scale_1)
         return coarse_matches
 
     def get_coarse_match(self,
@@ -168,10 +165,7 @@ class CoarseMatching(nn.Cell):
                          mask_c0,
                          mask_c1,
                          scale_0,
-                         scale_1,
-                         spv_b_ids,
-                         spv_i_ids,
-                         spv_j_ids):
+                         scale_1):
         """
         Args:
             conf_matrix (ms.Tensor): [N, L, S]
@@ -218,32 +212,33 @@ class CoarseMatching(nn.Cell):
         # 4. Random sampling of training samples for fine-level LoFTR
         # (optional) pad samples with gt coarse-level matches
         if self.training:
-            num_candidates_max = int(self.compute_max_candidates(
-                mask_c0, mask_c1))
-            num_matches_train = int(num_candidates_max *
-                                    self.train_coarse_percent)
-            num_matches_pred = int(match_masks.squeeze(0).sum())
-            assert self.train_pad_num_gt_min < num_matches_train, "min-num-gt-pad should be less than num-train-matches"
-
-            if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
-                pred_indices = ops.arange(num_matches_pred)
-            else:
-                pred_indices = ops.randint(0,
-                                           num_matches_pred,
-                                           (num_matches_train - self.train_pad_num_gt_min,))
-                pred_mask_valid = [1 for _ in range(num_matches_train - self.train_pad_num_gt_min)] + \
-                                  [0 for _ in range(l - num_matches_train + self.train_pad_num_gt_min )]
-                pred_mask_valid = ms.Tensor([pred_mask_valid], dtype=ms.int32)
-                match_masks = ops.mul(match_masks.astype(ms.int32), pred_mask_valid)
-
-            gt_pad_indices = ops.randint(0,
-                                        len(spv_b_ids),
-                                        (max(num_matches_train - num_matches_pred,
-                                            self.train_pad_num_gt_min), ))
-            mconf_gt = ops.zeros(len(spv_b_ids))  # set conf of gt paddings to all zero
-            row_ids = ops.cat([row_ids[0][pred_indices], spv_i_ids[gt_pad_indices]], axis=0)[None]
-            colum_ids = ops.cat([colum_ids[0][pred_indices], spv_j_ids[gt_pad_indices]], axis=0)[None]
-            match_conf = ops.cat([match_conf[0][pred_indices], mconf_gt[gt_pad_indices]], axis=0)[None]
+            pass
+            # num_candidates_max = int(self.compute_max_candidates(
+            #     mask_c0, mask_c1))
+            # num_matches_train = int(num_candidates_max *
+            #                         self.train_coarse_percent)
+            # num_matches_pred = int(match_masks.squeeze(0).sum())
+            # assert self.train_pad_num_gt_min < num_matches_train, "min-num-gt-pad should be less than num-train-matches"
+            #
+            # if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
+            #     pred_indices = ops.arange(num_matches_pred)
+            # else:
+            #     pred_indices = ops.randint(0,
+            #                                num_matches_pred,
+            #                                (num_matches_train - self.train_pad_num_gt_min,))
+            #     pred_mask_valid = [1 for _ in range(num_matches_train - self.train_pad_num_gt_min)] + \
+            #                       [0 for _ in range(l - num_matches_train + self.train_pad_num_gt_min )]
+            #     pred_mask_valid = ms.Tensor([pred_mask_valid], dtype=ms.int32)
+            #     match_masks = ops.mul(match_masks.astype(ms.int32), pred_mask_valid)
+            #
+            # gt_pad_indices = ops.randint(0,
+            #                             len(spv_b_ids),
+            #                             (max(num_matches_train - num_matches_pred,
+            #                                 self.train_pad_num_gt_min), ))
+            # mconf_gt = ops.zeros(len(spv_b_ids))  # set conf of gt paddings to all zero
+            # row_ids = ops.cat([row_ids[0][pred_indices], spv_i_ids[gt_pad_indices]], axis=0)[None]
+            # colum_ids = ops.cat([colum_ids[0][pred_indices], spv_j_ids[gt_pad_indices]], axis=0)[None]
+            # match_conf = ops.cat([match_conf[0][pred_indices], mconf_gt[gt_pad_indices]], axis=0)[None]
 
         # match_ids: b_id: 0 i_id, j_id
         # replace valid index to 0

@@ -148,8 +148,9 @@ class LoFTRLoss(nn.Cell):
                 return None
 
         # l2 loss with std
-        offset_l2 = ((expec_f_gt[correct_mask] - expec_f[correct_mask, :2]) ** 2).sum(-1)
-        loss = (offset_l2 * weight[correct_mask]).mean()
+        correct_mask = correct_mask.astype(ms.int32)
+        offset_l2 = ((expec_f_gt - expec_f[:, :2]) ** 2).sum(-1)
+        loss = (offset_l2 * weight * correct_mask).sum() / correct_mask.sum()
 
         return loss
 

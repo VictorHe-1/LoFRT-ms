@@ -79,10 +79,7 @@ def infer(args):
             img1 = ms.Tensor(np.load("./debug/image0.npy"))
             mask_c0 = ms.Tensor(np.load("./debug/mask0.npy"))
             mask_c1 = ms.Tensor(np.load("./debug/mask1.npy"))
-            match_kpts_f0, match_kpts_f1, match_conf, match_masks, _ = model(img0, img1, mask_c0, mask_c1)
-        # with Timer("second inference"):
-        #     # Inference with LoFTR and get prediction
-        #     match_kpts_f0, match_kpts_f1, match_conf, match_masks = model(img0, img1, mask_c0, mask_c1)
+            match_kpts_f0, match_kpts_f1, match_conf, match_masks, _ = model(img0, img1, mask_c0, mask_c1, ms.Tensor([1.0], dtype=ms.float32), ms.Tensor([1.0], dtype=ms.float32))
 
         with Timer("from device to host"):
             match_kpts_f0 = match_kpts_f0.squeeze(0).asnumpy()  # (num_max_match, 2)

@@ -71,7 +71,7 @@ class Evaluator:
             # For testing: we don't need spv_b_ids, spv_i_ids, spv_j_ids
             inputs.extend([None, None, None])
             match_kpts_f0, match_kpts_f1, match_conf, match_masks = self.net(*inputs)
-            batch_data = dict(zip(self.loader_output_columns, in_data))
+            batch_data = dict(zip(self.loader_output_columns, data))
             match_masks = match_masks.squeeze(0)
             num_valid_match = match_masks.sum()
             batch_data['m_bids'] = ms.Tensor([0 for _ in range(num_valid_match)], dtype=ms.int32)

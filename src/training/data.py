@@ -139,8 +139,9 @@ class MultiSceneDataModule:
         self.parallel_load_data = getattr(args, 'parallel_load_data', False)
         self.seed = config.TRAINER.SEED  # 66
         self.stage = None
+        self.config = config
 
-    def setup(self, stage=None, distribute=False):
+    def setup(self, stage=None, distribute=False, output_idx=None):
         """
         Setup train / val / test dataset. This method will be called by PL automatically.
         Args:
@@ -166,7 +167,9 @@ class MultiSceneDataModule:
                 self.train_intrinsic_path,
                 mode='train',
                 min_overlap_score=self.min_overlap_score_train,
-                pose_dir=self.train_pose_root)
+                pose_dir=self.train_pose_root,
+                output_idx=output_idx
+            )
             # setup multiple (optional) validation subsets
             if isinstance(self.val_list_path, (list, tuple)):
                 self.val_dataset = []
@@ -209,7 +212,8 @@ class MultiSceneDataModule:
                        intri_path,
                        mode='train',
                        min_overlap_score=0.,
-                       pose_dir=None):
+                       pose_dir=None,
+                       output_idx=None):
         """ Setup train / val / test set"""
         with open(scene_list_path, 'r') as f:
             npz_names = [name.split()[0] for name in f.readlines()]
@@ -224,7 +228,7 @@ class MultiSceneDataModule:
             if self.parallel_load_data \
             else self._build_concat_dataset
         return dataset_builder(data_root, local_npz_names, split_npz_root, intri_path,
-                               mode=mode, min_overlap_score=min_overlap_score, pose_dir=pose_dir)
+                               mode=mode, min_overlap_score=min_overlap_score, pose_dir=pose_dir, output_idx=output_idx)
 
     def _build_concat_dataset(
             self,
@@ -234,7 +238,8 @@ class MultiSceneDataModule:
             intrinsic_path,
             mode,
             min_overlap_score=0.,
-            pose_dir=None
+            pose_dir=None,
+            output_idx=None,
     ):
         datasets = []
         augment_fn = self.augment_fn if mode == 'train' else None
@@ -266,7 +271,9 @@ class MultiSceneDataModule:
                                      img_padding=self.mgdpt_img_pad,
                                      depth_padding=self.mgdpt_depth_pad,
                                      augment_fn=augment_fn,
-                                     coarse_scale=self.coarse_scale))
+                                     coarse_scale=self.coarse_scale,
+                                     config=self.config,
+                                     output_idx=output_idx))
             else:
                 raise NotImplementedError()
         return ConcatDataset(datasets)  # TODO: convert each item into GeneratorDataset and concat them.

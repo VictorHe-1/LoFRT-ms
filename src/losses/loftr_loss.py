@@ -170,7 +170,8 @@ class LoFTRLoss(nn.Cell):
                   mask1,
                   conf_matrix,
                   conf_matrix_gt,
-                  match_masks
+                  match_masks,
+                  full_masks
                   ):
         """
         Update:
@@ -186,8 +187,8 @@ class LoFTRLoss(nn.Cell):
         # 1. coarse-level loss
         if self.sparse_spvs and self.match_type == 'sinkhorn':
             raise NotImplementedError()
-        match_weight1 = match_masks.unsqueeze(2).tile((1, 1, c_weight.shape[2])).astype(ms.int32)
-        match_weight2 = match_masks.unsqueeze(0).tile((1, c_weight.shape[1], 1)).astype(ms.int32)
+        match_weight1 = full_masks.unsqueeze(2).tile((1, 1, c_weight.shape[2])).astype(ms.int32)
+        match_weight2 = full_masks.unsqueeze(0).tile((1, c_weight.shape[1], 1)).astype(ms.int32)
         c_weight = c_weight * match_weight1 * match_weight2
         loss_c = self.compute_coarse_loss(
             conf_matrix,

@@ -103,16 +103,27 @@ def build_dataset(
         num_workers = int(cores / num_devices)
     # prefetch_size: the length of the cache queue in the data pipeline for each worker, used to reduce waiting time.
     # Larger value leads to more memory consumption. Default: 16
-    prefetch_size = loader_config.get("prefetch_size", 16)  #
+    prefetch_size = loader_config.get("prefetch_size", 1)  #
     ms.dataset.config.set_prefetch_size(prefetch_size)
     # max_rowsize: MB of shared memory between processes to copy data. Only used when python_multiprocessing is True.
-    max_rowsize = loader_config.get("max_rowsize", 64)
+    max_rowsize = loader_config.get("max_rowsize", 160)
     # auto tune num_workers, prefetch. (This conflicts the profiler)
     # ms.dataset.config.set_autotune_interval(5)
     # ms.dataset.config.set_enable_autotune(True, "./dataproc_autotune_out")
     dataset_column_names = dataset.get_output_columns()
     # Generate source dataset (source w.r.t. the dataset.map pipeline)
     # based on python callable numpy dataset in parallel
+    if is_train:
+        dataset_column_names = ['image0',
+            'image1',
+            'mask0',
+            'mask1',
+            'scale0',
+            'scale1',
+            'conf_matrix_gt',
+            'spv_w_pt0_i',
+            'spv_pt1_i'
+        ]
     ds = ms.dataset.GeneratorDataset(
         dataset,
         column_names=dataset_column_names,

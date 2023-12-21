@@ -19,7 +19,7 @@ cfg.TRAINER.dataset_sink_mode = False
 cfg.LOFTR.MATCH_COARSE.TRAIN_COARSE_PERCENT = 0.3
 
 # system config
-cfg.system.mode = 1  # 0 for graph mode, 1 for pynative mode in MindSpore
+cfg.system.mode = 0  # 0 for graph mode, 1 for pynative mode in MindSpore
 cfg.system.distribute = False
 cfg.system.device_id = 0
 cfg.system.amp_level = 'O0'

@@ -81,7 +81,7 @@ class CoarseMatching(nn.Cell):
         self.train_coarse_percent = config['train_coarse_percent']
         self.train_pad_num_gt_min = config['train_pad_num_gt_min']
 
-        self.num_max_match = config.get('num_max_match', None)
+        self.num_max_match = config.get('num_max_match', 2000)
         self.bmm = ops.BatchMatMul(transpose_b=True)
 
         # we provide 2 options for differentiable matching
@@ -210,59 +210,26 @@ class CoarseMatching(nn.Cell):
         match_conf = ops.gather_elements(conf_rows, dim=2, index=colum_ids.expand_dims(-1))[..., 0]
 
         # 4. Random sampling of training samples for fine-level LoFTR
-        # (optional) pad samples with gt coarse-level matches
+        # (optional) pad 200 samples with gt coarse-level matches
         if self.training:
             pass
-            # num_candidates_max = int(self.compute_max_candidates(
-            #     mask_c0, mask_c1))
-            # num_matches_train = int(num_candidates_max *
-            #                         self.train_coarse_percent)
-            # num_matches_pred = int(match_masks.squeeze(0).sum())
-            # assert self.train_pad_num_gt_min < num_matches_train, "min-num-gt-pad should be less than num-train-matches"
-            #
-            # if num_matches_pred <= num_matches_train - self.train_pad_num_gt_min:
-            #     pred_indices = ops.arange(num_matches_pred)
-            # else:
-            #     pred_indices = ops.randint(0,
-            #                                num_matches_pred,
-            #                                (num_matches_train - self.train_pad_num_gt_min,))
-            #     pred_mask_valid = [1 for _ in range(num_matches_train - self.train_pad_num_gt_min)] + \
-            #                       [0 for _ in range(l - num_matches_train + self.train_pad_num_gt_min )]
-            #     pred_mask_valid = ms.Tensor([pred_mask_valid], dtype=ms.int32)
-            #     match_masks = ops.mul(match_masks.astype(ms.int32), pred_mask_valid)
-            #
-            # gt_pad_indices = ops.randint(0,
-            #                             len(spv_b_ids),
-            #                             (max(num_matches_train - num_matches_pred,
-            #                                 self.train_pad_num_gt_min), ))
-            # mconf_gt = ops.zeros(len(spv_b_ids))  # set conf of gt paddings to all zero
-            # row_ids = ops.cat([row_ids[0][pred_indices], spv_i_ids[gt_pad_indices]], axis=0)[None]
-            # colum_ids = ops.cat([colum_ids[0][pred_indices], spv_j_ids[gt_pad_indices]], axis=0)[None]
-            # match_conf = ops.cat([match_conf[0][pred_indices], mconf_gt[gt_pad_indices]], axis=0)[None]
+            # mconf_gt = ops.zeros(self.train_pad_num_gt_min)  # set conf of gt paddings to all zero
+            # row_ids = ops.cat([row_ids[0], spv_i_ids], axis=0)[None]
+            # colum_ids = ops.cat([colum_ids[0], spv_j_ids], axis=0)[None]
+            # match_conf = ops.cat([match_conf[0], mconf_gt], axis=0)[None]
 
         # match_ids: b_id: 0 i_id, j_id
         # replace valid index to 0
         match_ids = ops.stack([row_ids % l, colum_ids], axis=-1)  # (bs, l, 2)
 
         # 4. Update with matches in original image resolution
-        # scale = data['hw0_i'][0] / data['hw0_c'][0]
-        # scale0 = scale * data['scale0'][b_ids] if 'scale0' in data else scale  # TODO check data[‘scale0’]
-        # scale1 = scale * data['scale1'][b_ids] if 'scale1' in data else scale
         scale = hw_i0[0] / hw_c0[0]
         # scale_0[0] represents scale_0[b_id]
         mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]
         mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale * scale_1[0]
 
-        # These matches is the current prediction (for visualization)
-        # coarse_matches.update({
-        #     'gt_mask': mconf == 0,
-        #     'm_bids': b_ids[mconf != 0],  # mconf == 0 => gt matches
-        #     'mkpts0_c': mkpts0_c[mconf != 0],
-        #     'mkpts1_c': mkpts1_c[mconf != 0],
-        #     'mconf': mconf[mconf != 0]
-        # })
-
         if self.num_max_match is not None:
+            full_mask = match_masks.copy()
             match_masks = match_masks[:, :self.num_max_match]
             match_ids = match_ids[:, :self.num_max_match]
             match_conf = match_conf[:, :self.num_max_match]
@@ -274,4 +241,5 @@ class CoarseMatching(nn.Cell):
             ops.stop_gradient(match_conf), \
             ops.stop_gradient(mkpts_c0), \
             ops.stop_gradient(mkpts_c1), \
+            ops.stop_gradient(full_mask), \
             conf_matrix

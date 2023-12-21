@@ -124,7 +124,7 @@ def main():
 
     # create dataset
     data_module = MultiSceneDataModule(args, config)
-    data_module.setup(stage='fit', distribute=config.system.distribute)
+    data_module.setup(stage='fit', distribute=config.system.distribute, output_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19])
     train_dataset, loader_train = build_dataset(
         data_module.train_dataset,
         data_module.train_loader_params,
@@ -187,8 +187,7 @@ def main():
         clip_norm=config.TRAINER.get("clip_norm", 1.0),
         ema=ema,
         config=config,
-        data_cols=train_dataset.get_output_columns(),
-        input_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19]
+        data_cols=train_dataset.get_output_columns()
     )
 
     # build callbacks
@@ -197,7 +196,7 @@ def main():
         loader_eval,
         config,
         rank_id=rank_id,
-        device_num=device_num,
+        device_num=device_num if device_num > 1 else None,
         batch_size=args.batch_size,
         ckpt_save_dir=config.TRAINER.ckpt_save_dir,
         main_indicator=config.metrics.main_indicator,

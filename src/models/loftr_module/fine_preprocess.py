@@ -27,7 +27,7 @@ class FinePreprocess(nn.Cell):
     def construct(self, feat_f0, feat_f1, feat_c0, feat_c1, hw_c0, hw_f0, coarse_match_ids):
         W = self.W
         stride = hw_f0[0] // hw_c0[0]
-
+        # self.W 5 stride: 4 padding: 2
         # Step1. unfold(crop) all local windows
         feat_f0_unfold = ops.unfold(feat_f0, kernel_size=(self.W, self.W), stride=stride, padding=self.W//2)  # TODO to reshape and concat
         n, c_ww, l = feat_f0_unfold.shape

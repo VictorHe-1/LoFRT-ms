@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from src.utils.dataset import read_megadepth_gray, read_megadepth_depth
+from src.models.utils.supervision_numpy import spvs_coarse
 
 
 def _interpolate_4d_mask(mask, scale_factor):
@@ -43,6 +44,8 @@ class MegaDepthDataset:
                  img_padding=False,
                  depth_padding=False,
                  augment_fn=None,
+                 config=None,
+                 output_idx=None,
                  **kwargs):
         """
         Manage one scene(npz_path) of MegaDepth dataset.
@@ -84,9 +87,11 @@ class MegaDepthDataset:
         # for training LoFTR
         self.augment_fn = augment_fn if mode == 'train' else None
         self.coarse_scale = getattr(kwargs, 'coarse_scale', 0.125)
-
+        self.config = config
+        self.output_idx = output_idx  # [0, 2, 15, 16, 8, 9, 17, 18, 19]
         # ms special
         self.init_output_columns()
+
 
     def init_output_columns(self):
         self.output_columns = [
@@ -163,4 +168,7 @@ class MegaDepthDataset:
                 data[idx] = np.array(item)
             if data[idx].dtype == np.float64:
                 data[idx] = data[idx].astype(np.float32)
+        if self.mode == 'train':
+            data, self.output_columns = spvs_coarse(data, self.config, self.output_columns)
+            data = [data[idx] for idx in self.output_idx]
         return tuple(data)

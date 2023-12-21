@@ -21,7 +21,6 @@ def image_pad(img, pad_shape, coarse_scale=8):
 
     coarse_img_h, coarse_img_w = img_shape[0] // coarse_scale, img_shape[1] // coarse_scale
     coarse_pad_h, coarse_pad_w = pad_shape[0] // coarse_scale, pad_shape[1] // coarse_scale
-
     mask_c = get_mask([coarse_img_h, coarse_img_w], [coarse_pad_h, coarse_pad_w], coarse_border_thresh=0)
     return img, mask_c
 
@@ -49,7 +48,7 @@ def infer(args):
         with Timer('build net and load weight'):
             model = LoFTR(config=default_cfg)
             model.set_train(False)
-            ckpt_path = "./models/ms-outdoor_ds.ckpt"
+            ckpt_path = "./models/ms_outdoor_ds.ckpt"
             ms.load_checkpoint(ckpt_path, model)
 
         ms.amp.auto_mixed_precision(network=model, amp_level=args.amp_level)
@@ -75,10 +74,15 @@ def infer(args):
 
         with Timer("inference"):
             # Inference with LoFTR and get prediction
-            match_kpts_f0, match_kpts_f1, match_conf, match_masks = model(img0, img1, mask_c0, mask_c1)
-        with Timer("second inference"):
-            # Inference with LoFTR and get prediction
-            match_kpts_f0, match_kpts_f1, match_conf, match_masks = model(img0, img1, mask_c0, mask_c1)
+            import numpy as np
+            img0 = ms.Tensor(np.load("./debug/image0.npy"))
+            img1 = ms.Tensor(np.load("./debug/image0.npy"))
+            mask_c0 = ms.Tensor(np.load("./debug/mask0.npy"))
+            mask_c1 = ms.Tensor(np.load("./debug/mask1.npy"))
+            match_kpts_f0, match_kpts_f1, match_conf, match_masks, _ = model(img0, img1, mask_c0, mask_c1)
+        # with Timer("second inference"):
+        #     # Inference with LoFTR and get prediction
+        #     match_kpts_f0, match_kpts_f1, match_conf, match_masks = model(img0, img1, mask_c0, mask_c1)
 
         with Timer("from device to host"):
             match_kpts_f0 = match_kpts_f0.squeeze(0).asnumpy()  # (num_max_match, 2)
@@ -91,6 +95,7 @@ def infer(args):
         match_kpts_f1 = match_kpts_f1[:num_valid_match]
         match_conf = match_conf[:num_valid_match]
         match_masks = match_masks[:num_valid_match]
+        breakpoint()
         print(f'matched point num: {num_valid_match}')
     with Timer("draw and save"):
         # Draw
@@ -137,9 +142,9 @@ if __name__ == '__main__':
 
     parser.add_argument("--device", type=str, default="Ascend", help="The device to run generation on.")
 
-    parser.add_argument("--mode", type=int, default=0, help="MindSpore context mode. 0 for graph, 1 for pynative.")
+    parser.add_argument("--mode", type=int, default=1, help="MindSpore context mode. 0 for graph, 1 for pynative.")
 
-    parser.add_argument("--amp_level", type=str, default="O2", help="auto mixed precision level O0, O2.")
+    parser.add_argument("--amp_level", type=str, default="O0", help="auto mixed precision level O0, O2.")
 
     parser.add_argument(
         "--enable-plt-visual",

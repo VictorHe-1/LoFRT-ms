@@ -7,8 +7,6 @@ from mindspore.ops import composite as C
 from mindspore.ops import functional as F
 from mindspore.ops import operations as P
 
-from src.models.utils.supervision import spvs_coarse
-
 _grad_scale = C.MultitypeFuncGraph("grad_scale")
 reciprocal = P.Reciprocal()
 _grad_overflow = C.MultitypeFuncGraph("_grad_overflow")
@@ -58,8 +56,7 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
         clip_norm=1.0,
         verbose=False,
         config=None,
-        data_cols=None,
-        input_idx=None
+        data_cols=None
     ):
         super().__init__(network, optimizer, scale_sense)
         self.ema = ema
@@ -91,14 +88,13 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
         self.partial = ops.Partial()
         self.config = config
         self.data_cols = data_cols
-        self.input_idx = input_idx
 
     def construct(self, *inputs):
         # compute loss
         weights = self.weights
-        inputs, self.data_cols = spvs_coarse(list(inputs), self.config, self.data_cols)
-        model_inputs = [inputs[idx] for idx in self.input_idx]
-        loss = self.network(*model_inputs)  # mini-batch loss
+        # inputs, self.data_cols = spvs_coarse(list(inputs), self.config, self.data_cols)
+        # model_inputs = [inputs[idx] for idx in self.input_idx]
+        loss = self.network(*inputs)  # mini-batch loss
         scaling_sens = self.scale_sense
 
         # check loss overflow
@@ -110,7 +106,7 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
         scaling_sens_filled = C.ones_like(loss) * F.cast(scaling_sens, F.dtype(loss))  # loss scale value
 
         # 1. compute gradients (of the up-scaled loss w.r.t. the model weights)
-        grads = self.grad(self.network, weights)(*tuple(model_inputs), scaling_sens_filled)
+        grads = self.grad(self.network, weights)(*inputs, scaling_sens_filled)
 
         # 2. down-scale gradients by loss_scale. grads = grads / scaling_sense  / grad_accu_steps
         # also divide gradients by accumulation steps to avoid taking mean of  the accumulated gradients later

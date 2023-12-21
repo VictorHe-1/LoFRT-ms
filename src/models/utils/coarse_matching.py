@@ -227,9 +227,8 @@ class CoarseMatching(nn.Cell):
         # scale_0[0] represents scale_0[b_id]
         mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]
         mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale * scale_1[0]
-
+        full_mask = match_masks.copy()
         if self.num_max_match is not None:
-            full_mask = match_masks.copy()
             match_masks = match_masks[:, :self.num_max_match]
             match_ids = match_ids[:, :self.num_max_match]
             match_conf = match_conf[:, :self.num_max_match]

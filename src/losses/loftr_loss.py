@@ -33,16 +33,16 @@ class LoFTRLoss(nn.Cell):
         pos_mask, neg_mask = conf_gt == 1, conf_gt == 0
         c_pos_w, c_neg_w = self.c_pos_w, self.c_neg_w
         # corner case: no gt coarse-level match at all
-        if not pos_mask.any():  # assign a wrong gt
-            pos_mask[0, 0, 0] = True
-            if weight is not None:
-                weight[0, 0, 0] = 0.
-            c_pos_w = 0.
-        if not neg_mask.any():
-            neg_mask[0, 0, 0] = True
-            if weight is not None:
-                weight[0, 0, 0] = 0.
-            c_neg_w = 0.
+        # if not pos_mask.any():  # assign a wrong gt
+        #     pos_mask[0, 0, 0] = True
+        #     if weight is not None:
+        #         weight[0, 0, 0] = 0.
+        #     c_pos_w = 0.
+        # if not neg_mask.any():
+        #     neg_mask[0, 0, 0] = True
+        #     if weight is not None:
+        #         weight[0, 0, 0] = 0.
+        #     c_neg_w = 0.
         pos_mask = pos_mask.astype(ms.int32)
         neg_mask = neg_mask.astype(ms.int32)
         if self.coarse_type == 'cross_entropy':

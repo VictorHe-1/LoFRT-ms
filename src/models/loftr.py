@@ -37,7 +37,6 @@ class LoFTR(nn.Cell):
         # 2. get coarse prediction
         # match_ids: [bs, l, 2]
         i_ids, j_ids = match_ids[0][:, 0], match_ids[0][:, 1]
-        b_ids = ms.Tensor([0 for _ in range(match_ids.shape[1])], dtype=ms.int32)
 
         # 3. compute gt
         scale = scale * scale1[0]

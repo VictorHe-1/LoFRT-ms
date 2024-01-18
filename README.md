@@ -1,4 +1,4 @@
-# LoFRT-ms
+# LoFTR-ms
 LoFTR implemented with mindspore framework
 
 ## Preprocessing Dataset

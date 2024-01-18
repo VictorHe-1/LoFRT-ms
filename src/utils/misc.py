@@ -113,6 +113,5 @@ def fetch_optimizer_lr(opt):
                 cur_dynamic_lr = learning_rate(opt.global_step).reshape(())
                 lr += (cur_dynamic_lr,)
         else:
-            lr = opt.learning_rate(opt.global_step - 1).reshape(())
-    # print(f"After, global step: {opt.global_step}")
+            lr = opt.learning_rate(opt.global_step).reshape(())
     return lr

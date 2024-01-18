@@ -93,7 +93,7 @@ class LoFTR(nn.Cell):
         mask_c0_flat, mask_c1_flat = mask_c0.flatten(start_dim=-2), mask_c1.flatten(start_dim=-2)  # (bs, c, hw)
         feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0_flat, mask_c1_flat)
         # Step3: match coarse-level
-        match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1, full_mask, conf_matrix = self.coarse_matching(feat_c0,
+        match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1, conf_matrix = self.coarse_matching(feat_c0,
                                                                                                             feat_c1,
                                                                                                             hw_c0,
                                                                                                             hw_c1,
@@ -123,8 +123,7 @@ class LoFTR(nn.Cell):
                              mask_c1,
                              conf_matrix,
                              conf_matrix_gt,
-                             match_masks,
-                             full_mask)
+                             match_masks)
         else:
             return match_kpts_f0, match_kpts_f1, match_conf, match_masks
 

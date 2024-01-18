@@ -14,7 +14,7 @@ from .misc import AllReduce, AverageMeter, fetch_optimizer_lr
 from .recorder import PerfRecorder
 
 __all__ = ["EvalSaveCallback"]
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger("loftr.train")
 
 
 class EvalSaveCallback(Callback):

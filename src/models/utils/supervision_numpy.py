@@ -156,8 +156,8 @@ def spvs_coarse(data, config, data_cols):
 
     # 5. save coarse matches(gt) for training fine level
     # 'spv_b_ids', 'spv_i_ids', 'spv_j_ids',
-    data_cols.extend(['spv_w_pt0_i', 'spv_pt1_i'])
-    data.extend([w_pt0_i[0].astype(np.float32), grid_pt1_i[0].astype(np.float32)])
+    data_cols.extend(['spv_w_pt0_i', 'spv_pt1_i', 'spv_i_ids', 'spv_j_ids'])
+    data.extend([w_pt0_i[0].astype(np.float32), grid_pt1_i[0].astype(np.float32), i_ids.astype(np.int32), j_ids.astype(np.int32)])
     return data, data_cols
 
 ##############   Fine-Level supervision is moved to the loftr model  ##############

@@ -108,7 +108,7 @@ def main():
         for col in ['image0', 'image1', 'mask0', 'mask1', 'scale0', 'scale1']:
             model_input.append(batch_data[col])
         # For testing: we don't need spv_b_ids, spv_i_ids, spv_j_ids
-        model_input.extend([None, None, None])
+        model_input.extend([None, None, None, None, None])
         match_kpts_f0, match_kpts_f1, match_conf, match_masks = network(*model_input)
         match_masks = match_masks.squeeze(0)
         num_valid_match = match_masks.sum()

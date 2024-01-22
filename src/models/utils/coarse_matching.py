@@ -81,7 +81,7 @@ class CoarseMatching(nn.Cell):
         self.train_coarse_percent = config['train_coarse_percent']
         self.train_pad_num_gt_min = config['train_pad_num_gt_min']
 
-        self.num_max_match = config.get('num_max_match', 2000)
+        self.num_max_match = config.get('num_max_match', None)
         self.bmm = ops.BatchMatMul(transpose_b=True)
 
         # we provide 2 options for differentiable matching
@@ -113,7 +113,9 @@ class CoarseMatching(nn.Cell):
                   mask_c0,
                   mask_c1,
                   scale_0,
-                  scale_1
+                  scale_1,
+                  spv_i_ids,
+                  spv_j_ids
                   ):
         """
         Args:
@@ -153,7 +155,7 @@ class CoarseMatching(nn.Cell):
         # predict coarse matches from conf_matrix
         # TODO check no grad ?equals to stop_gradient
         coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0,
-                                               scale_1)
+                                               scale_1, spv_i_ids, spv_j_ids)
         return coarse_matches
 
     def get_coarse_match(self,
@@ -165,7 +167,9 @@ class CoarseMatching(nn.Cell):
                          mask_c0,
                          mask_c1,
                          scale_0,
-                         scale_1):
+                         scale_1,
+                         spv_i_ids,
+                         spv_j_ids):
         """
         Args:
             conf_matrix (ms.Tensor): [N, L, S]
@@ -212,11 +216,10 @@ class CoarseMatching(nn.Cell):
         # 4. Random sampling of training samples for fine-level LoFTR
         # (optional) pad 200 samples with gt coarse-level matches
         if self.training:
-            pass
-            # mconf_gt = ops.zeros(self.train_pad_num_gt_min)  # set conf of gt paddings to all zero
-            # row_ids = ops.cat([row_ids[0], spv_i_ids], axis=0)[None]
-            # colum_ids = ops.cat([colum_ids[0], spv_j_ids], axis=0)[None]
-            # match_conf = ops.cat([match_conf[0], mconf_gt], axis=0)[None]
+            mconf_gt = ops.zeros(self.train_pad_num_gt_min)  # set conf of gt paddings to all zero
+            row_ids = ops.cat([row_ids[0], spv_i_ids[0]], axis=0)[None]
+            colum_ids = ops.cat([colum_ids[0], spv_j_ids[0]], axis=0)[None]
+            match_conf = ops.cat([match_conf[0], mconf_gt], axis=0)[None]
 
         # match_ids: b_id: 0 i_id, j_id
         # replace valid index to 0

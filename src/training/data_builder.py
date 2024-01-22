@@ -122,7 +122,9 @@ def build_dataset(
             'scale1',
             'conf_matrix_gt',
             'spv_w_pt0_i',
-            'spv_pt1_i'
+            'spv_pt1_i',
+            'spv_i_ids',
+            'spv_j_ids'
         ]
     ds = ms.dataset.GeneratorDataset(
         dataset,

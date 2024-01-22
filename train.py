@@ -124,7 +124,7 @@ def main():
 
     # create dataset
     data_module = MultiSceneDataModule(args, config)
-    data_module.setup(stage='fit', distribute=config.system.distribute, output_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19])
+    data_module.setup(stage='fit', distribute=config.system.distribute, output_idx=[0, 2, 15, 16, 8, 9, 17, 18, 19, 20, 21])
     train_dataset, loader_train = build_dataset(
         data_module.train_dataset,
         data_module.train_loader_params,

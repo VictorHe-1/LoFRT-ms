@@ -46,6 +46,7 @@ class MegaDepthDataset:
                  augment_fn=None,
                  config=None,
                  output_idx=None,
+                 train_pad_num_gt_min=None,
                  **kwargs):
         """
         Manage one scene(npz_path) of MegaDepth dataset.
@@ -89,6 +90,7 @@ class MegaDepthDataset:
         self.coarse_scale = getattr(kwargs, 'coarse_scale', 0.125)
         self.config = config
         self.output_idx = output_idx  # [0, 2, 15, 16, 8, 9, 17, 18, 19]
+        self.train_pad_num_gt_min = train_pad_num_gt_min
         # ms special
         self.init_output_columns()
 
@@ -169,6 +171,6 @@ class MegaDepthDataset:
             if data[idx].dtype == np.float64:
                 data[idx] = data[idx].astype(np.float32)
         if self.mode == 'train':
-            data, self.output_columns = spvs_coarse(data, self.config, self.output_columns)
+            data, self.output_columns = spvs_coarse(data, self.config, self.output_columns, self.train_pad_num_gt_min)
             data = [data[idx] for idx in self.output_idx]
         return tuple(data)

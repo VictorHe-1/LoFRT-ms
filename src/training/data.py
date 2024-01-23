@@ -140,6 +140,7 @@ class MultiSceneDataModule:
         self.seed = config.TRAINER.SEED  # 66
         self.stage = None
         self.config = config
+        self.train_pad_num_gt_min = config.LOFTR.MATCH_COARSE.TRAIN_PAD_NUM_GT_MIN
 
     def setup(self, stage=None, distribute=False, output_idx=None):
         """
@@ -273,7 +274,8 @@ class MultiSceneDataModule:
                                      augment_fn=augment_fn,
                                      coarse_scale=self.coarse_scale,
                                      config=self.config,
-                                     output_idx=output_idx))
+                                     output_idx=output_idx,
+                                     train_pad_num_gt_min=self.train_pad_num_gt_min))
             else:
                 raise NotImplementedError()
         return ConcatDataset(datasets)  # TODO: convert each item into GeneratorDataset and concat them.

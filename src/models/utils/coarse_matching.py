@@ -220,6 +220,7 @@ class CoarseMatching(nn.Cell):
             row_ids = ops.cat([row_ids[0], spv_i_ids[0]], axis=0)[None]
             colum_ids = ops.cat([colum_ids[0], spv_j_ids[0]], axis=0)[None]
             match_conf = ops.cat([match_conf[0], mconf_gt], axis=0)[None]
+            match_masks = row_ids != l
 
         # match_ids: b_id: 0 i_id, j_id
         # replace valid index to 0

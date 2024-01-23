@@ -146,11 +146,24 @@ def spvs_coarse(data, config, data_cols, train_pad_num_gt_min):
     correct_0to1 = loop_back == np.tile(np.arange(h0 * w0)[None], (N, 1))
     correct_0to1[:, 0] = False  # ignore the top-left corner
 
+
+
     # 4. construct a gt conf_matrix
     conf_matrix_gt = np.zeros((N, h0 * w0, h1 * w1))
     b_ids, i_ids = np.where(correct_0to1 != 0)
     j_ids = nearest_index1[b_ids, i_ids]
     conf_matrix_gt[b_ids, i_ids, j_ids] = 1
+
+    # gt_i, gt_j
+    mask0 = data[-2]
+    l = mask0.shape[0] * mask0.shape[1]
+    pad_i_ids = np.ones((train_pad_num_gt_min, )) * l
+    pad_j_ids = np.ones((train_pad_num_gt_min, )) * l
+    pad_i_len = min(len(i_ids), train_pad_num_gt_min)
+    pad_j_len = min(len(j_ids), train_pad_num_gt_min)
+    pad_i_ids[:pad_i_len] = i_ids[:pad_i_len]
+    pad_j_ids[:pad_j_len] = j_ids[:pad_j_len]
+
     data.append(conf_matrix_gt[0].astype(np.float32))
     data_cols.append("conf_matrix_gt")
 
@@ -158,7 +171,7 @@ def spvs_coarse(data, config, data_cols, train_pad_num_gt_min):
     # 'spv_b_ids', 'spv_i_ids', 'spv_j_ids',
     data_cols.extend(['spv_w_pt0_i', 'spv_pt1_i', 'spv_i_ids', 'spv_j_ids'])
     data.extend([w_pt0_i[0].astype(np.float32), grid_pt1_i[0].astype(np.float32),
-                 i_ids[:train_pad_num_gt_min].astype(np.int32), j_ids[:train_pad_num_gt_min].astype(np.int32)])
+                 pad_i_ids.astype(np.int32), pad_j_ids.astype(np.int32)])
     return data, data_cols
 
 ##############   Fine-Level supervision is moved to the loftr model  ##############

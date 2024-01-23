@@ -69,7 +69,7 @@ class Evaluator:
             else:
                 inputs = [data[0]]
             # For testing: we don't need spv_b_ids, spv_i_ids, spv_j_ids
-            inputs.extend([None, None, None])
+            inputs.extend([None, None, None, None, None])
             match_kpts_f0, match_kpts_f1, match_conf, match_masks = self.net(*inputs)
             batch_data = dict(zip(self.loader_output_columns, data))
             match_masks = match_masks.squeeze(0)

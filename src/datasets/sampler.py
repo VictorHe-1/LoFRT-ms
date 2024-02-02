@@ -1,11 +1,12 @@
 '''
 This file is currently not used!
 '''
-import torch
-from torch.utils.data import Sampler, ConcatDataset
+import mindspore as ms
+from mindspore import ops
+from src.training.data import ConcatDataset
 
 
-class RandomConcatSampler(Sampler):
+class RandomConcatSampler:
     """ Random sampler for ConcatDataset. At each epoch, `n_samples_per_subset` samples will be draw from each subset
     in the ConcatDataset. If `subset_replacement` is ``True``, sampling within each subset will be done with replacement.
     However, it is impossible to sample data without replacement between epochs, unless bulding a stateful sampler lived along the entire training phase.
@@ -29,7 +30,7 @@ class RandomConcatSampler(Sampler):
                  repeat: int=1,
                  seed: int=None):
         if not isinstance(data_source, ConcatDataset):
-            raise TypeError("data_source should be torch.utils.data.ConcatDataset")
+            raise TypeError("data_source should be ConcatDataset")
         
         self.data_source = data_source
         self.n_subset = len(self.data_source.datasets)
@@ -38,8 +39,7 @@ class RandomConcatSampler(Sampler):
         self.subset_replacement = subset_replacement
         self.repeat = repeat
         self.shuffle = shuffle
-        self.generator = torch.manual_seed(seed)
-        assert self.repeat >= 1
+        self.generator = seed
         
     def __len__(self):
         return self.n_samples
@@ -51,30 +51,30 @@ class RandomConcatSampler(Sampler):
             low = 0 if d_idx==0 else self.data_source.cumulative_sizes[d_idx-1]
             high = self.data_source.cumulative_sizes[d_idx]
             if self.subset_replacement:
-                rand_tensor = torch.randint(low, high, (self.n_samples_per_subset, ),
-                                            generator=self.generator, dtype=torch.int64)
+                rand_tensor = ops.randint(low, high, (self.n_samples_per_subset, ),
+                                            seed=self.generator, dtype=ms.int32)
             else:  # sample without replacement
                 len_subset = len(self.data_source.datasets[d_idx])
-                rand_tensor = torch.randperm(len_subset, generator=self.generator) + low
+                rand_tensor = ops.randperm(len_subset) + low
                 if len_subset >= self.n_samples_per_subset:
                     rand_tensor = rand_tensor[:self.n_samples_per_subset]
                 else: # padding with replacement
-                    rand_tensor_replacement = torch.randint(low, high, (self.n_samples_per_subset - len_subset, ),
-                                                            generator=self.generator, dtype=torch.int64)
-                    rand_tensor = torch.cat([rand_tensor, rand_tensor_replacement])
+                    rand_tensor_replacement = ops.randint(low, high, (self.n_samples_per_subset - len_subset, ),
+                                                            seed=self.generator, dtype=ms.int32)
+                    rand_tensor = ops.cat([rand_tensor, rand_tensor_replacement])
             indices.append(rand_tensor)
-        indices = torch.cat(indices)
+        indices = ops.cat(indices)
         if self.shuffle:  # shuffle the sampled dataset (from multiple subsets)
-            rand_tensor = torch.randperm(len(indices), generator=self.generator)
+            rand_tensor = ops.randperm(len(indices), seed=self.generator)
             indices = indices[rand_tensor]
 
         # repeat the sampled indices (can be used for RepeatAugmentation or pure RepeatSampling)
         if self.repeat > 1:
-            repeat_indices = [indices.clone() for _ in range(self.repeat - 1)]
+            repeat_indices = [indices for _ in range(self.repeat - 1)]
             if self.shuffle:
-                _choice = lambda x: x[torch.randperm(len(x), generator=self.generator)]
+                _choice = lambda x: x[ops.randperm(len(x), seed=self.generator)]
                 repeat_indices = map(_choice, repeat_indices)
-            indices = torch.cat([indices, *repeat_indices], 0)
+            indices = ops.cat([indices, *repeat_indices], 0)
         
-        assert indices.shape[0] == self.n_samples
-        return iter(indices.tolist())
+        # assert indices.shape[0] == self.n_samples
+        return iter(indices.asnumpy().tolist())

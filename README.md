@@ -27,6 +27,17 @@ sh scripts/mega_depth_link.sh
 bash scripts/reproduce_train/outdoor_ds.sh 
 ```
 
+## Distribute Training
+Before performing distributed training, it is necessary to modify the [loftr configuration](./configs/loftr/outdoor/loftr_ds_dense.py) file as follows:
+   ```diff
+   - cfg.system.distribute = False
+   + cfg.system.distribute = True
+   ```
+Then run the following command:
+```console
+bash scripts/reproduce_train/distribute_outdoor_ds.sh 
+```
+
 ## Testing
 ```console
 bash scripts/reproduce_test/outdoor_ds.sh 

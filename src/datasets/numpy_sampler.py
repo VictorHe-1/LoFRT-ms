@@ -59,18 +59,6 @@ class RandomConcatSampler:
 
 
 if __name__ == "__main__":
-    # 定义一个简单的数据集类
-    class MyDataset:
-        def __init__(self, data):
-            self.data = data
-
-        def __len__(self):
-            return len(self.data)
-
-        def __getitem__(self, idx):
-            return self.data[idx]
-
-
     class ConcatDataset:
         @staticmethod
         def cumsum(sequence):
@@ -108,8 +96,8 @@ if __name__ == "__main__":
 
 
     # 创建两个数据集示例
-    dataset1 = MyDataset([1, 2, 3, 4, 5])
-    dataset2 = MyDataset([6, 7, 8, 9, 10])
+    dataset1 = [1, 2, 3, 4]
+    dataset2 = [6, 7, 8, 9, 10]
 
     # 创建ConcatDataset，将两个数据集合并在一起
     concat_dataset = ConcatDataset([dataset1, dataset2])

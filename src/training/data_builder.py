@@ -13,6 +13,7 @@ def build_dataset(
         num_shards=None,
         shard_id=None,
         is_train=True,
+        sampler=None,
         **kwargs,
 ):
     """
@@ -133,6 +134,7 @@ def build_dataset(
         python_multiprocessing=True,  # keep True to improve performace for heavy computation.
         max_rowsize=max_rowsize,
         shuffle=loader_config.get("shuffle", False),  # to add
+        sampler=sampler
     )
 
     # 2. data mapping using mindata C lib (optional)

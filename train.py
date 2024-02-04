@@ -131,6 +131,7 @@ def main():
         num_shards=device_num,
         shard_id=rank_id,
         is_train=True,
+        sampler=data_module.sampler
     )
     val_dataset, loader_eval = build_dataset(
         data_module.val_dataset,

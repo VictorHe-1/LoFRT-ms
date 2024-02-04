@@ -3,7 +3,6 @@ This file is currently not used!
 '''
 import mindspore as ms
 from mindspore import ops
-from src.training.data import ConcatDataset
 
 
 class RandomConcatSampler:
@@ -23,15 +22,12 @@ class RandomConcatSampler:
           ref: https://github.com/PyTorchLightning/pytorch-lightning/blob/e9846dd758cfb1500eb9dba2d86f6912eb487587/pytorch_lightning/trainer/training_loop.py#L373
     """
     def __init__(self,
-                 data_source: ConcatDataset,
-                 n_samples_per_subset: int,
-                 subset_replacement: bool=True,
-                 shuffle: bool=True,
-                 repeat: int=1,
-                 seed: int=None):
-        if not isinstance(data_source, ConcatDataset):
-            raise TypeError("data_source should be ConcatDataset")
-        
+                 data_source,
+                 n_samples_per_subset,
+                 subset_replacement=True,
+                 shuffle=True,
+                 repeat=1,
+                 seed=None):
         self.data_source = data_source
         self.n_subset = len(self.data_source.datasets)
         self.n_samples_per_subset = n_samples_per_subset

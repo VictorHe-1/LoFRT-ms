@@ -18,6 +18,7 @@ from src.utils.dataloader import get_local_split
 from src.utils.misc import tqdm_joblib
 from src.datasets.megadepth import MegaDepthDataset
 from src.datasets.scannet import ScanNetDataset
+from src.datasets.numpy_sampler import RandomConcatSampler
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,7 @@ class MultiSceneDataModule:
         self.subset_replacement = config.TRAINER.SB_SUBSET_SAMPLE_REPLACEMENT
         self.shuffle = config.TRAINER.SB_SUBSET_SHUFFLE
         self.repeat = config.TRAINER.SB_REPEAT
+        self.sampler = None
 
         # (optional) RandomSampler for debugging
 
@@ -171,6 +173,12 @@ class MultiSceneDataModule:
                 pose_dir=self.train_pose_root,
                 output_idx=output_idx
             )
+            self.sampler = RandomConcatSampler(self.train_dataset,
+                                               self.n_samples_per_subset,
+                                               self.subset_replacement,
+                                               self.shuffle,
+                                               self.repeat,
+                                               self.seed)
             # setup multiple (optional) validation subsets
             if isinstance(self.val_list_path, (list, tuple)):
                 self.val_dataset = []

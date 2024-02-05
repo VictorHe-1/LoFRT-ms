@@ -23,7 +23,7 @@ cfg.system.mode = 0  # 0 for graph mode, 1 for pynative mode in MindSpore
 cfg.system.distribute = False
 cfg.system.device_id = 0
 cfg.system.amp_level = 'O0'
-cfg.system.drop_overflow_update = False
+cfg.system.drop_overflow_update = True
 cfg.system.val_interval = 1
 cfg.system.val_while_train = True
 

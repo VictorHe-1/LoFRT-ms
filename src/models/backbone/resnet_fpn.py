@@ -110,13 +110,11 @@ class ResNetFPN_8_2(nn.Cell):
         # FPN
         x3_out = self.layer3_outconv(x3)
 
-        # x3_out_2x = ops.interpolate(x3_out, scale_factor=(2.0, 2.0), mode='bilinear', align_corners=True)
         new_shape = 2 * x3_out.shape[2], 2 * x3_out.shape[3]
         x3_out_2x = self.resize_bilinear_v2(x3_out, new_shape)
         x2_out = self.layer2_outconv(x2)
         x2_out = self.layer2_outconv2(x2_out+x3_out_2x)
 
-        # x2_out_2x = ops.interpolate(x2_out, scale_factor=(2.0, 2.0), mode='bilinear', align_corners=True)
         new_shape = 2 * x2_out.shape[2], 2 * x2_out.shape[3]
         x2_out_2x = self.resize_bilinear_v2(x2_out, new_shape)
         x1_out = self.layer1_outconv(x1)

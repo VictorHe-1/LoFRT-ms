@@ -1,4 +1,3 @@
-"""Train step wrapper supporting setting drop overflow update, ema etc"""
 import mindspore as ms
 import mindspore.context as context
 from mindspore import Parameter, Tensor, nn, ops
@@ -71,7 +70,6 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
         self.grad_accu_steps = gradient_accumulation_steps
         if gradient_accumulation_steps > 1:
             # additionally caches network trainable parameters. overhead caused.
-            # TODO: try to store it in CPU memory instead of GPU/NPU memory.
             self.accumulated_grads = optimizer.parameters.clone(prefix="grad_accumulated_", init="zeros")
             self.zeros = optimizer.parameters.clone(prefix="zeros_", init="zeros")
             self.cur_accu_step = Parameter(Tensor(0, ms.int32), "grad_accumulate_step_", requires_grad=False)
@@ -92,8 +90,6 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
     def construct(self, *inputs):
         # compute loss
         weights = self.weights
-        # inputs, self.data_cols = spvs_coarse(list(inputs), self.config, self.data_cols)
-        # model_inputs = [inputs[idx] for idx in self.input_idx]
         loss = self.network(*inputs)  # mini-batch loss
         scaling_sens = self.scale_sense
 
@@ -161,7 +157,6 @@ class TrainOneStepWrapper(nn.TrainOneStepWithLossScaleCell):
             if self.ema is not None:
                 self.ema.ema_update()
         else:
-            # print("WARNING: Gradient overflow! update skipped.")
-            pass
+            print("WARNING: Gradient overflow! update skipped.")
 
         return loss, cond, scaling_sens

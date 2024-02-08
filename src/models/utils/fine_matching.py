@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import mindspore as ms
 from mindspore import nn, ops
@@ -21,15 +20,13 @@ def create_meshgrid(
     Return:
         ms.Tensor: returns a grid tensor with shape :math:`(1, H, W, 2)`.
     """
-    # linspace only support fp32 and fp64
-    # xs = ops.linspace(ms.Tensor(0.0, ms.float32), ms.Tensor(width - 1, ms.float32), ms.Tensor(width, ms.int32)).astype(dtype)
-    # ys = ops.linspace(ms.Tensor(0.0, ms.float32), ms.Tensor(height - 1, ms.float32), ms.Tensor(height, ms.int32)).astype(dtype)
     xs = ops.arange(width, dtype=dtype)
     ys = ops.arange(height, dtype=dtype)
 
     if normalized_coordinates:
         xs = (xs / (width - 1) - 0.5) * 2
         ys = (ys / (height - 1) - 0.5) * 2
+
     # generate grid by stacking coordinates
     base_grid = ops.stack(ops.meshgrid(xs, ys, indexing='xy'))  # (2, h, w)
     return base_grid.permute(1, 2, 0)  # (h, w, 2)
@@ -128,7 +125,6 @@ class FineMatching(nn.Cell):
         # compute absolute kpt coords
         match_kpts_f1 = match_kpts_c1 + (coords_normalized * (w // 2) * scale * scale_1[0])  # (bs, num_match, 2) TODO check length when training
 
-        # TODO check no_grad ?equals to stop_gradient
         match_kpts_f0 = ops.stop_gradient(match_kpts_c0)  # the key points of the first image remains unchanged
         match_kpts_f1 = ops.stop_gradient(match_kpts_f1)
 

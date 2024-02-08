@@ -77,7 +77,8 @@ class CoarseMatching(nn.Cell):
         # general config
         self.thr = config['thr']
         self.border_rm = config['border_rm']
-        # -- # for trainig fine-level LoFTR
+
+        # for trainig fine-level LoFTR
         self.train_coarse_percent = config['train_coarse_percent']
         self.train_pad_num_gt_min = config['train_pad_num_gt_min']
 
@@ -153,7 +154,6 @@ class CoarseMatching(nn.Cell):
             raise NotImplementedError()
 
         # predict coarse matches from conf_matrix
-        # TODO check no grad ?equals to stop_gradient
         coarse_matches = self.get_coarse_match(conf_matrix, hw_c0, hw_c1, hw_i0, hw_i1, mask_c0, mask_c1, scale_0,
                                                scale_1, spv_i_ids, spv_j_ids)
         return coarse_matches
@@ -180,6 +180,7 @@ class CoarseMatching(nn.Cell):
         bs, l, s = conf_matrix.shape
         # 1. confidence thresholding
         mask = conf_matrix > self.thr
+
         # 2. safe margin
         mask_c0 = mask_c0.view(bs, hw_c0[0], hw_c0[1])
         mask_c1 = mask_c1.view(bs, hw_c1[0], hw_c1[1])
@@ -187,8 +188,6 @@ class CoarseMatching(nn.Cell):
         mask = mask_border_with_padding(mask, self.border_rm,
                                         mask_c0,
                                         mask_c1)  # mask_c0, 0 for pad area
-        # mask_border = ops.logical_and(mask_c0[:, :, :, None, None], mask_c1[:, None, None, :, :])
-        # mask = ops.logical_and(mask, mask_border)
         mask = mask.view(bs, l, s)
 
         # 3. mutual nearest
@@ -207,14 +206,11 @@ class CoarseMatching(nn.Cell):
         row_ids = ops.gather_elements(row_ids, dim=1, index=index)
         colum_ids = ops.gather_elements(colum_ids, dim=1, index=index)
         match_masks = row_ids != l
-        # match_conf = ops.grid_sample(conf_matrix, match_ids, mode='nearest')  # (bs, l)
-
-        # conf_rows = conf_matrix[row_ids]  # [bs, l, s]
         conf_rows = ops.gather(conf_matrix, input_indices=row_ids, axis=1, batch_dims=1)
         match_conf = ops.gather_elements(conf_rows, dim=2, index=colum_ids.expand_dims(-1))[..., 0]
 
         # 4. Random sampling of training samples for fine-level LoFTR
-        # (optional) pad 200 samples with gt coarse-level matches
+        # (optional) pad self.train_pad_num_gt_min samples with gt coarse-level matches
         if self.training:
             mconf_gt = ops.zeros(self.train_pad_num_gt_min)  # set conf of gt paddings to all zero
             row_ids = ops.cat([row_ids[0], spv_i_ids[0]], axis=0)[None]
@@ -226,9 +222,8 @@ class CoarseMatching(nn.Cell):
         # replace valid index to 0
         match_ids = ops.stack([row_ids % l, colum_ids], axis=-1)  # (bs, l, 2)
 
-        # 4. Update with matches in original image resolution
+        # 5. Update with matches in original image resolution
         scale = hw_i0[0] / hw_c0[0]
-        # scale_0[0] represents scale_0[b_id]
         mkpts_c0 = ops.stack([row_ids % hw_c0[1], row_ids // hw_c0[1]], axis=2) * scale * scale_0[0]
         mkpts_c1 = ops.stack([colum_ids % hw_c1[1], colum_ids // hw_c1[1]], axis=2) * scale * scale_1[0]
         if self.num_max_match is not None:

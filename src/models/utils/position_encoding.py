@@ -1,5 +1,4 @@
 import math
-import mindspore as ms
 from mindspore import nn, ops
 
 
@@ -31,8 +30,6 @@ class PositionEncodingSine(nn.Cell):
         pe[1::4, :, :] = ops.cos(x_position * div_term)
         pe[2::4, :, :] = ops.sin(y_position * div_term)
         pe[3::4, :, :] = ops.cos(y_position * div_term)
-
-        # self.register_buffer('pe', pe.unsqueeze(0), persistent=False)  # [1, C, H, W]
         self.pe = pe  # [C, H, W]
 
     def construct(self, x):

@@ -1,4 +1,3 @@
-import mindspore as ms
 from mindspore import nn, ops
 from .backbone import build_backbone
 from .utils.position_encoding import PositionEncodingSine

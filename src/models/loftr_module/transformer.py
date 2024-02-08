@@ -85,9 +85,6 @@ class LocalFeatureTransformer(nn.Cell):
             mask0 (ms.Tensor): [N, L] (optional)
             mask1 (ms.Tensor): [N, S] (optional)
         """
-
-        assert self.d_model == feat0.shape[2], "the feature number of src and transformer must be equal"
-
         for layer, name in zip(self.layers, self.layer_names):
             if name == 'self':
                 feat0 = layer(feat0, feat0, mask0, mask0)

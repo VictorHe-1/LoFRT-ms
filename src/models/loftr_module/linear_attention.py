@@ -3,7 +3,9 @@ Linear Transformer proposed in "Transformers are RNNs: Fast Autoregressive Trans
 Modified from: https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
 """
 from mindspore import nn, ops
+
 INF = 1e9
+
 
 def elu_feature_map(x):
     return ops.elu(x) + 1
@@ -46,7 +48,8 @@ class LinearAttention(nn.Cell):
         # (bs, l, num_head, head_dim) * (bs, 1, num_head, head_dim) -> (bs, l, num_head, head_dim)
         # sum 3 -> (bs, l, num_head)
         if q_mask is not None:  # to prevent 0-division
-            Z = ops.where(q_mask[:, :, None], ops.reciprocal((Q * K.sum(1).expand_dims(1)).sum(3)+ self.eps), q_mask[:, :, None].astype(Q.dtype))
+            Z = ops.where(q_mask[:, :, None], ops.reciprocal((Q * K.sum(1).expand_dims(1)).sum(3) + self.eps),
+                          q_mask[:, :, None].astype(Q.dtype))
         else:
             Z = ops.reciprocal((Q * K.sum(1).expand_dims(1)).sum(3) + self.eps)
 
@@ -82,7 +85,7 @@ class FullAttention(nn.Cell):
             QK.masked_fill(~(mask), -INF)
 
         # Compute the attention and the weighted average
-        softmax_temp = 1. / queries.shape[3]**.5  # sqrt(D)
+        softmax_temp = 1. / queries.shape[3] ** .5  # sqrt(D)
         A = ops.softmax(softmax_temp * QK, axis=2)
         if self.use_dropout:
             A = self.dropout(A)

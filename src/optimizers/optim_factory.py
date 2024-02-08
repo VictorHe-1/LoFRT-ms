@@ -2,7 +2,6 @@
 import inspect
 import logging
 import os
-from typing import Optional
 
 from mindspore import load_checkpoint, load_param_into_net, nn
 

@@ -1,4 +1,3 @@
-import mindspore as ms
 from mindspore import nn, ops
 import mindspore.common.initializer as init
 

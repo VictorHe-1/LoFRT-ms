@@ -1,5 +1,4 @@
 import logging
-from math import log
 
 import numpy as np
 
@@ -112,17 +111,17 @@ def spvs_coarse(data, config, data_cols, train_pad_num_gt_min):
     # (no depth consistency check, since it leads to worse results experimentally)
     # (unhandled edge case: points with 0-depth will be warped to the left-up corner)
     _, w_pt0_i = warp_kpts(grid_pt0_i,
-                             data[1][None],
-                             data[3][None],
-                             data[4][None],
-                             data[6][None],
-                             data[7][None])
+                           data[1][None],
+                           data[3][None],
+                           data[4][None],
+                           data[6][None],
+                           data[7][None])
     _, w_pt1_i = warp_kpts(grid_pt1_i,
-                             data[3][None],
-                             data[1][None],
-                             data[5][None],
-                             data[7][None],
-                             data[6][None])
+                           data[3][None],
+                           data[1][None],
+                           data[5][None],
+                           data[7][None],
+                           data[6][None])
     w_pt0_c = w_pt0_i / scale1
     w_pt1_c = w_pt1_i / scale0
     # 3. check if mutual nearest neighbor
@@ -146,8 +145,6 @@ def spvs_coarse(data, config, data_cols, train_pad_num_gt_min):
     correct_0to1 = loop_back == np.tile(np.arange(h0 * w0)[None], (N, 1))
     correct_0to1[:, 0] = False  # ignore the top-left corner
 
-
-
     # 4. construct a gt conf_matrix
     conf_matrix_gt = np.zeros((N, h0 * w0, h1 * w1))
     b_ids, i_ids = np.where(correct_0to1 != 0)
@@ -157,8 +154,8 @@ def spvs_coarse(data, config, data_cols, train_pad_num_gt_min):
     # gt_i, gt_j
     mask0 = data[-2]
     l = mask0.shape[0] * mask0.shape[1]
-    pad_i_ids = np.ones((train_pad_num_gt_min, )) * l
-    pad_j_ids = np.ones((train_pad_num_gt_min, )) * l
+    pad_i_ids = np.ones((train_pad_num_gt_min,)) * l
+    pad_j_ids = np.ones((train_pad_num_gt_min,)) * l
     pad_i_len = min(len(i_ids), train_pad_num_gt_min)
     pad_j_len = min(len(j_ids), train_pad_num_gt_min)
     pad_i_ids[:pad_i_len] = i_ids[:pad_i_len]

@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-import copy
 from typing import List, Tuple
 
 import mindspore as ms
@@ -233,7 +232,6 @@ class EvalSaveCallback(Callback):
         if (self.ema is not None) and eval_done:
             self.ema.swap_after_eval()
 
-        # tot_time = time.time() - self.last_epoch_end_time
         self.last_epoch_end_time = time.time()
 
     def on_train_end(self, run_context):

@@ -1,7 +1,6 @@
 import io
 
 import cv2
-import mindspore as ms
 import numpy as np
 import h5py
 from numpy.linalg import inv

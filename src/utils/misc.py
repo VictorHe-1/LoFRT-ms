@@ -1,8 +1,6 @@
-import os
 from typing import Optional
 import contextlib
 import joblib
-from typing import Union
 from itertools import chain
 
 from yacs.config import CfgNode as CN
@@ -103,7 +101,6 @@ class AverageMeter:
 
 
 def fetch_optimizer_lr(opt):
-    # print(f"Before, global step: {opt.global_step}")
     lr = opt.learning_rate
     if opt.dynamic_lr:
         if opt.is_group_lr:

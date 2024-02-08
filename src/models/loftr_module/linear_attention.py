@@ -2,10 +2,8 @@
 Linear Transformer proposed in "Transformers are RNNs: Fast Autoregressive Transformers with Linear Attention"
 Modified from: https://github.com/idiap/fast-transformers/blob/master/fast_transformers/attention/linear_attention.py
 """
-
-import mindspore as ms
 from mindspore import nn, ops
-
+INF = 1e9
 
 def elu_feature_map(x):
     return ops.elu(x) + 1
@@ -40,22 +38,13 @@ class LinearAttention(nn.Cell):
 
         v_length = values.shape[1]
         values = values / v_length  # scale up to prevent fp16 overflow
-        # KV = torch.einsum("nshd,nshv->nhdv", K, values)  # (S,D)' @ S,V
+
         # (bs, s, num_head, head_dim, 1) * (bs, s, num_head, 1, head_dim) -> (bs, s, num_head, head_dim, head_dim)
         # sum 1 -> (bs, num_head, head_dim, head_dim)
         KV = (K.expand_dims(-1) * values.expand_dims(3)).sum(1)
 
         # (bs, l, num_head, head_dim) * (bs, 1, num_head, head_dim) -> (bs, l, num_head, head_dim)
         # sum 3 -> (bs, l, num_head)
-
-        # if q_mask is not None:  # to prevent overflow when float16
-        #     recip_z = (Q * K.sum(1).expand_dims(1)).sum(3) + ops.logical_not(q_mask[:, :, None]).astype(Q.dtype)
-        #     Z = ops.reciprocal(recip_z)
-        #     Z = Z - ops.logical_not(q_mask[:, :, None]).astype(Q.dtype)
-        # else:
-        #     recip_z = (Q * K.sum(1).expand_dims(1)).sum(3)
-        #     Z = ops.reciprocal(recip_z)
-
         if q_mask is not None:  # to prevent 0-division
             Z = ops.where(q_mask[:, :, None], ops.reciprocal((Q * K.sum(1).expand_dims(1)).sum(3)+ self.eps), q_mask[:, :, None].astype(Q.dtype))
         else:
@@ -72,9 +61,9 @@ class FullAttention(nn.Cell):
     def __init__(self, use_dropout=False, attention_dropout=0.1):
         super().__init__()
         self.use_dropout = use_dropout
-        self.dropout = nn.Dropout(attention_dropout)
+        self.dropout = nn.Dropout(p=attention_dropout)
 
-    def forward(self, queries, keys, values, q_mask=None, kv_mask=None):
+    def construct(self, queries, keys, values, q_mask=None, kv_mask=None):
         """ Multi-head scaled dot-product attention, a.k.a full attention.
         Args:
             queries: [N, L, H, D]
@@ -87,16 +76,16 @@ class FullAttention(nn.Cell):
         """
 
         # Compute the unnormalized attention and apply the masks
-        QK = torch.einsum("nlhd,nshd->nlsh", queries, keys)
+        QK = ops.matmul(queries.permute(0, 2, 1, 3), keys.permute(0, 2, 3, 1)).permute(0, 2, 3, 1)
+        mask = (q_mask[:, :, None, None] * kv_mask[:, None, :, None]).bool()
         if kv_mask is not None:
-            QK.masked_fill_(~(q_mask[:, :, None, None] * kv_mask[:, None, :, None]), float('-inf'))
+            QK.masked_fill(~(mask), -INF)
 
         # Compute the attention and the weighted average
-        softmax_temp = 1. / queries.size(3)**.5  # sqrt(D)
+        softmax_temp = 1. / queries.shape[3]**.5  # sqrt(D)
         A = ops.softmax(softmax_temp * QK, axis=2)
         if self.use_dropout:
             A = self.dropout(A)
 
-        queried_values = torch.einsum("nlsh,nshd->nlhd", A, values)
-
+        queried_values = ops.matmul(A.permute(0, 3, 1, 2), values.permute(0, 2, 1, 3)).permute(0, 2, 1, 3)
         return queried_values

@@ -95,14 +95,13 @@ if __name__ == "__main__":
             return self.datasets[dataset_idx][sample_idx]
 
 
-    # 创建两个数据集示例
+    # create two datasets
     dataset1 = [1, 2, 3, 4]
     dataset2 = [6, 7, 8, 9, 10]
 
-    # 创建ConcatDataset，将两个数据集合并在一起
     concat_dataset = ConcatDataset([dataset1, dataset2])
 
-    # 创建RandomConcatSampler实例
+    # Create RandomConcatSampler
     sampler = RandomConcatSampler(concat_dataset, n_samples_per_subset=2, subset_replacement=True, shuffle=True,
                                   repeat=1, seed=42)
     for value in sampler:

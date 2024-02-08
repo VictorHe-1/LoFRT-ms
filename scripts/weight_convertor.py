@@ -1,17 +1,12 @@
 import os
-import random
-import re
 
-import cv2
 import mindspore
-import numpy as np
 import torch
 
 
 def pytorch_params(pth_file, verbose=False):
     par_dict = torch.load(pth_file, map_location='cpu')
     pt_params = {}
-    # print(par_dict)
     if 'model' in par_dict and len(par_dict) < 10:
         par_dict = par_dict['model']
     elif 'state_dict' in par_dict:
@@ -24,7 +19,6 @@ def pytorch_params(pth_file, verbose=False):
     return pt_params
 
 
-# 通过MindSpore的Cell，打印Cell里所有参数的参数名和shape，返回参数字典
 def mindspore_params(network, verbose=False):
     ms_params = {}
     for param in network.get_parameters():
@@ -61,7 +55,6 @@ def map_torch_to_mindspore(ms_dict, torch_dict, verbose=False):
 
         if verbose:
             print(name, value.shape)
-            # print(torch_name, value.shape)
         assert value.shape == convert_value.shape, f"value shape not match, ms {name} {value.shape}, torch {torch_name}{convert_value.shape}"
         new_params_list.append(dict(name=name, data=convert_value))
     return new_params_list
@@ -88,9 +81,9 @@ def convert_parameter(i_pth_path, i_ms_pth_path, ms_model, verbose=False):
 
 
 if __name__ == "__main__":
-
-    pth_path = '/data1/detrgroup/zhouwuxing/projects/LoFTR/weights/outdoor_ds.ckpt'
-    ms_pth_path = os.path.join('./models', "ms-outdoor_ds.ckpt")
+    print("plese input your pytorch loftr model path(e.g. /data1/outdoor_ds.ckpt):", end='')
+    pth_path = input()
+    ms_pth_path = os.path.join('./models', "ms_outdoor_ds.ckpt")
 
     from src.models import LoFTR, default_cfg
 

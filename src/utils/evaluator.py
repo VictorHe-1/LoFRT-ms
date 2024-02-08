@@ -1,11 +1,7 @@
 import logging
-from typing import List
 
 from tqdm import tqdm
-
 import mindspore as ms
-from mindspore.common import dtype as mstype
-from mindspore.ops import functional as F
 
 from .metrics import compute_metrics, aggregate_metrics
 from .misc import flattenList
@@ -58,9 +54,6 @@ class Evaluator:
         self.input_indices = input_indices
 
     def eval(self):
-        """
-        Args:
-        """
         self.net.set_train(False)
         output_metrics = []
         for i, data in tqdm(enumerate(self.iterator), total=self.num_batches_eval):

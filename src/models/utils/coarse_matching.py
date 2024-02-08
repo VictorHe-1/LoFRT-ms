@@ -97,6 +97,9 @@ class CoarseMatching(nn.Cell):
 
         Args:
             p_m0, p_m1 (ms.Tensor): padded masks
+
+        Returns:
+            max_cand (ms.Tensor): The max candidates of all pairs within a batch
         """
         h0s, w0s = p_m0.sum(1).max(-1, return_indices=True)[0], p_m0.sum(-1).max(-1, return_indices=True)[0]
         h1s, w1s = p_m1.sum(1).max(-1, return_indices=True)[0], p_m1.sum(-1).max(-1, return_indices=True)[0]
@@ -119,25 +122,28 @@ class CoarseMatching(nn.Cell):
                   spv_j_ids
                   ):
         """
+        Matches coarse-level features based on the confidence matrix produced in forward pass.
+
         Args:
-            feat0 (ms.Tensor): [N, L, C]
-            feat1 (ms.Tensor): [N, S, C]
-            data (dict)
-            mask_i0_flat (ms.Tensor): [N, L] (optional), 0 for pad area
-            mask_i1_flat (ms.Tensor): [N, S] (optional)
-            mask_c0_margin (ms.Tensor): [N, h0, w0], compared to mask_i0_flat, only mask the margin with 0, this is a
-                                       hack implementation of 'mask_border_with_padding'
-            mask_c1_margin: see mask_c0_margin
-        Update:
-            data (dict): {
-                'b_ids' (ms.Tensor): [M'],
-                'i_ids' (ms.Tensor): [M'],
-                'j_ids' (ms.Tensor): [M'],
-                'gt_mask' (ms.Tensor): [M'],
-                'mkpts0_c' (ms.Tensor): [M, 2],
-                'mkpts1_c' (ms.Tensor): [M, 2],
-                'mconf' (ms.Tensor): [M]}
-            NOTE: M' != M during training.
+            feat_c0 (ms.Tensor): Shape [N, L, C]. The feature of image 0, flattened from 2D to 1D.
+            feat_c1 (ms.Tensor): Shape [N, S, C]. The feature of image 1, flattened from 2D to 1D.
+            hw_c0 (tuple): Height and width of the coarse feature map from image 0.
+            hw_c1 (tuple): Height and width of the coarse feature map from image 1.
+            hw_i0 (tuple): Height and width of the original image 0.
+            hw_i1 (tuple): Height and width of the original image 1.
+            mask_c0 (ms.Tensor): Shape [N, L]. A mask indicating the valid area in the flattened feature map of image 0.
+            mask_c1 (ms.Tensor): Shape [N, S]. A mask indicating the valid area in the flattened feature map of image 1.
+            scale_0 (ms.Tensor): Shape [N, 2]. The scaling applied to image 0 during preprocessing.
+            scale_1 (ms.Tensor): Shape [N, 2]. The scaling applied to image 1 during preprocessing.
+            spv_i_ids, spv_j_ids (ms.Tensor): Supervisory signal indices used in training mode.
+
+        Returns:
+            Tuple(Tensor):
+            - match_ids (ms.Tensor): Shape (bs, l, 2). The indices of the matches.
+            - match_masks (ms.Tensor): A mask indicating the valid matches.
+            - match_conf (ms.Tensor): The confidence scores for each match.
+            - mkpts_c0, mkpts_c1 (ms.Tensor): The corresonding points in image 0 and image 1 for each match.
+            - conf_matrix (ms.Tensor): The confidence matrix used to identify the matches.
         """
         N, L, S, C = feat_c0.shape[0], feat_c0.shape[1], feat_c1.shape[1], feat_c0.shape[2]
 
@@ -170,13 +176,6 @@ class CoarseMatching(nn.Cell):
                          scale_1,
                          spv_i_ids,
                          spv_j_ids):
-        """
-        Args:
-            conf_matrix (ms.Tensor): [N, L, S]
-            data (dict): with keys ['hw0_i', 'hw1_i', 'hw0_c', 'hw1_c']
-        Returns:
-
-        """
         bs, l, s = conf_matrix.shape
         # 1. confidence thresholding
         mask = conf_matrix > self.thr

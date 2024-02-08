@@ -56,16 +56,28 @@ class LoFTR(nn.Cell):
                   spv_j_ids
                   ):
         """ 
-        forward pass
+        Performs the forward pass for the LoFTR model.
+
+        The process involves the following steps:
+          1) Extracting features from the images.
+          2) Performing self- and cross-attention at the coarse level.
+          3) Identifying matches at the coarse level.
+          4) Extracting small patches from the fine feature maps, centered at the coarse feature map points.
+          5) Performing self- and cross-attention at the fine level.
+          6) Matching at the fine level.
+
+        In the case of training, the function additionally computes the supervision for fine matching and returns the loss.
+
         Args:
-            image0: (ms.Tensor): (bs, 1, H, W)
-            image1: (ms.Tensor): (bs, 1, H, W)
-            mask_c0: (ms.Tensor[bool]): (bs, H, W) False indicates a padded position
-            mask_c1: (ms.Tensor): (bs, H, W)
-            scale0: (ms.Tensor): (bs, 2)
-            scale1: (ms.Tensor): (bs, 2)
-            # For training:
-            spv_b_ids, spv_i_ids, spv_j_ids
+            img0, img1 (ms.Tensor): Input images with the shape (bs, 1, H, W).
+            mask_c0, mask_c1 (ms.Tensor): Masks for the input images, indicating which areas are padded. False indicates a padded position.
+            scale0, scale1 (ms.Tensor): Scaling factors for the images, with the shape (bs, 2).
+            spv_i_ids, spv_j_ids (ms.Tensor): Indices for supervisory signals.
+            spv_w_pt0_i, spv_pt1_i (ms.Tensor): Supervisory signals for point locations.
+
+        Returns:
+            During training, it returns the computed loss.
+            During inference, it returns the keypoints and the match confidence for the image pair.
         """
         bs = img0.shape[0]
         hw_i0, hw_i1 = img0.shape[2:], img1.shape[2:]  # initial spatial shape of the image pair

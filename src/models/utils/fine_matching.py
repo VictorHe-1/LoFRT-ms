@@ -89,15 +89,22 @@ class FineMatching(nn.Cell):
 
     def construct(self, feat_f0, feat_f1, match_kpts_c0, match_kpts_c1, hw_i0, hw_f0, scale_1):
         """
+        Fine-level matching procedure that refines the matches found in the coarse-level descriptor.
+
         Args:
-            feat0 (ms.Tensor): [bs, num_match, ww, c]
-            feat1 (ms.Tensor): [bs, num_match, ww, c]
-            data (dict)
-        Update:
-            data (dict):{
-                'expec_f' (ms.Tensor): [M, 3],
-                'mkpts0_f' (ms.Tensor): [M, 2],
-                'mkpts1_f' (ms.Tensor): [M, 2]}
+            feat_f0 (ms.Tensor): Shape [bs, num_match, ww, c]. The fine-level feature descriptor of image 0.
+            feat_f1 (ms.Tensor): Shape [bs, num_match, ww, c]. The fine-level feature descriptor of image 1.
+            match_kpts_c0 (ms.Tensor): The matched keypoints in image 0 from the coarse-level descriptor.
+            match_kpts_c1 (ms.Tensor): The matched keypoints in image 1 from the coarse-level descriptor.
+            hw_i0 (tuple): Height and width of the original image 0.
+            hw_f0 (tuple): Height and width of the fine feature map from image 0.
+            scale_1 (ms.Tensor): The scaling applied to image 1 during preprocessing.
+
+        Returns:
+            Tuple(Tensor):
+            - match_kpts_f0 (ms.Tensor): The refined points in image 0 after fine-level processing.
+            - match_kpts_f1 (ms.Tensor): The refined points in image 1 after fine-level processing.
+            - expec_f (ms.Tensor): The distribution (mean, std) for fine-level supervision.
         """
         bs, num_match, ww, c = feat_f0.shape
         w = int(math.sqrt(ww))

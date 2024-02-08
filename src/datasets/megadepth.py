@@ -12,7 +12,7 @@ from src.models.utils.supervision_numpy import spvs_coarse
 def _interpolate_4d_mask(mask, scale_factor):
     """
     Resize a 4D numpy array using bilinear interpolation in the H and W dimensions.
-    :param pred: A 4D numpy array of shape (N, C, H, W).
+    :param mask: A 4D numpy array of shape (N, C, H, W).
     :param scale_factor: An integer value representing the scale factor applied to H and W.
     :return: A 4D numpy array of shape (N, C, H', W'), where H' and W' are scaled versions of H and W.
     """

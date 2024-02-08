@@ -1,7 +1,5 @@
 import os
 import sys
-import time
-import os.path as osp
 import logging
 import argparse
 import pprint
@@ -63,8 +61,10 @@ def main():
         log_level=eval(config.get("log_level", "logging.INFO")),
     )
     if "DEVICE_ID" in os.environ:
+        device_id = os.environ.get('DEVICE_ID')
+        ms.set_context(device_id=device_id)
         logger.info(
-            f"Standalone testing. Device id: {os.environ.get('DEVICE_ID')}, "
+            f"Standalone testing. Device id: {device_id}, "
             f"specified by environment variable 'DEVICE_ID'."
         )
     else:

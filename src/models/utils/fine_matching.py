@@ -19,7 +19,7 @@ def create_meshgrid(
           PyTorch function grid_sample.
 
     Return:
-        torch.Tensor: returns a grid tensor with shape :math:`(1, H, W, 2)`.
+        ms.Tensor: returns a grid tensor with shape :math:`(1, H, W, 2)`.
     """
     # linspace only support fp32 and fp64
     # xs = ops.linspace(ms.Tensor(0.0, ms.float32), ms.Tensor(width - 1, ms.float32), ms.Tensor(width, ms.int32)).astype(dtype)
@@ -98,9 +98,9 @@ class FineMatching(nn.Cell):
             data (dict)
         Update:
             data (dict):{
-                'expec_f' (torch.Tensor): [M, 3],
-                'mkpts0_f' (torch.Tensor): [M, 2],
-                'mkpts1_f' (torch.Tensor): [M, 2]}
+                'expec_f' (ms.Tensor): [M, 3],
+                'mkpts0_f' (ms.Tensor): [M, 2],
+                'mkpts1_f' (ms.Tensor): [M, 2]}
         """
         bs, num_match, ww, c = feat_f0.shape
         w = int(math.sqrt(ww))

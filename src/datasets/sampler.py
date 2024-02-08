@@ -10,7 +10,7 @@ class RandomConcatSampler:
     in the ConcatDataset. If `subset_replacement` is ``True``, sampling within each subset will be done with replacement.
     However, it is impossible to sample data without replacement between epochs, unless bulding a stateful sampler lived along the entire training phase.
     
-    For current implementation, the randomness of sampling is ensured no matter the sampler is recreated across epochs or not and call `torch.manual_seed()` or not.
+    For current implementation, the randomness of sampling is ensured no matter the sampler is recreated across epochs or not and call `ms.manual_seed()` or not.
     Args:
         shuffle (bool): shuffle the random sampled indices across all sub-datsets.
         repeat (int): repeatedly use the sampled indices multiple times for training.

@@ -3,7 +3,6 @@ Model training
 """
 import logging
 import os
-import shutil
 import sys
 import math
 import argparse
@@ -31,8 +30,6 @@ logger = logging.getLogger("loftr.train")
 
 
 def parse_args():
-    # init a costum parser which will be added into pl.Trainer parser
-    # check documentation: https://pytorch-lightning.readthedocs.io/en/latest/common/trainer.html#trainer-flags
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         'data_cfg_path', type=str, help='data config path')
@@ -79,7 +76,6 @@ def main():
             device_num=device_num,
             parallel_mode="data_parallel",
             gradients_mean=True,
-            # parameter_broadcast=True,
         )
         # create logger, only rank0 log will be output to the screen
         set_logger(
@@ -100,8 +96,10 @@ def main():
             log_level=eval(config.get("log_level", "logging.INFO")),
         )
         if "DEVICE_ID" in os.environ:
+            device_id = os.environ.get('DEVICE_ID')
+            ms.set_context(mode=config.system.mode, device_id=device_id, device_target='Ascend')
             logger.info(
-                f"Standalone training. Device id: {os.environ.get('DEVICE_ID')}, "
+                f"Standalone training. Device id: {device_id}, "
                 f"specified by environment variable 'DEVICE_ID'."
             )
         else:
@@ -160,24 +158,18 @@ def main():
                                    decay_rate=config.TRAINER.MSLR_GAMMA,
                                    milestones=config.TRAINER.MSLR_MILESTONES,
                                    num_epochs=args.max_epochs)
-    # build optimizer
-    # cfg.optimizer.update({"lr": lr_scheduler, "loss_scale": optimizer_loss_scale})
     params = create_group_params(network.trainable_params())  # TODO: currently no param grouping, confirm param grouping
 
-    # this setting doesn't take effect, just keep it.
+    # build optimizer
     weight_decay = config.TRAINER.ADAMW_DECAY if config.TRAINER.ADAMW_DECAY else config.TRAINER.ADAM_DECAY
     optimizer = build_optimizer(params, config, lr_scheduler, weight_decay=weight_decay, filter_bias_and_bn=False)  # TODO: confirm filter_bias_and_bn
-    # resume ckpt
+
     start_epoch = 0
     # build train step cell
     gradient_accumulation_steps = config.TRAINER.get("gradient_accumulation_steps", 1)
     clip_grad = config.TRAINER.get("clip_grad", False)
     use_ema = config.TRAINER.get("ema", False)
     ema = EMA(network, ema_decay=config.TRAINER.get("ema_decay", 0.9999), updates=0) if use_ema else None
-
-    # input_idx meaning:
-    # img0, img1, mask_c0, mask_c1, scale_0, scale_1,
-    # conf_matrix_gt, spv_w_pt0_i, spv_pt1_i, spv_b_ids, spv_i_ids, spv_j_ids,
     train_net = TrainOneStepWrapper(
         network,
         optimizer=optimizer,

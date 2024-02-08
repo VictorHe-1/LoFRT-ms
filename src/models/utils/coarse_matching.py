@@ -7,7 +7,7 @@ INF = 1e9
 def mask_border(m, b: int, v):
     """ Mask borders with value
     Args:
-        m (torch.Tensor): [N, H0, W0, H1, W1]
+        m (ms.Tensor): [N, H0, W0, H1, W1]
         b (int)
         v (m.dtype)
     """
@@ -95,7 +95,7 @@ class CoarseMatching(nn.Cell):
         """Compute the max candidates of all pairs within a batch
 
         Args:
-            p_m0, p_m1 (torch.Tensor): padded masks
+            p_m0, p_m1 (ms.Tensor): padded masks
         """
         h0s, w0s = p_m0.sum(1).max(-1, return_indices=True)[0], p_m0.sum(-1).max(-1, return_indices=True)[0]
         h1s, w1s = p_m1.sum(1).max(-1, return_indices=True)[0], p_m1.sum(-1).max(-1, return_indices=True)[0]
@@ -129,13 +129,13 @@ class CoarseMatching(nn.Cell):
             mask_c1_margin: see mask_c0_margin
         Update:
             data (dict): {
-                'b_ids' (torch.Tensor): [M'],
-                'i_ids' (torch.Tensor): [M'],
-                'j_ids' (torch.Tensor): [M'],
-                'gt_mask' (torch.Tensor): [M'],
-                'mkpts0_c' (torch.Tensor): [M, 2],
-                'mkpts1_c' (torch.Tensor): [M, 2],
-                'mconf' (torch.Tensor): [M]}
+                'b_ids' (ms.Tensor): [M'],
+                'i_ids' (ms.Tensor): [M'],
+                'j_ids' (ms.Tensor): [M'],
+                'gt_mask' (ms.Tensor): [M'],
+                'mkpts0_c' (ms.Tensor): [M, 2],
+                'mkpts1_c' (ms.Tensor): [M, 2],
+                'mconf' (ms.Tensor): [M]}
             NOTE: M' != M during training.
         """
         N, L, S, C = feat_c0.shape[0], feat_c0.shape[1], feat_c1.shape[1], feat_c0.shape[2]

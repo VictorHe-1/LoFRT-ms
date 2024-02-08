@@ -1,8 +1,6 @@
 import cv2
 import os.path as osp
 import numpy as np
-import mindspore as ms
-from mindspore import ops
 import logging
 
 logger = logging.getLogger(__name__)
@@ -114,8 +112,6 @@ class MegaDepthDataset:
             'pair_names_1',
             'mask0',
             'mask1']
-        # if self.mode in ['train', 'val']:
-        #     self.output_columns += ['mask0', 'mask1']
 
     def get_output_columns(self):
         return self.output_columns

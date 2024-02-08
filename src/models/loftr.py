@@ -34,15 +34,12 @@ class LoFTR(nn.Cell):
         scale = self.scale_spvs
         radius = self.radius_spvs
 
-        # 2. get coarse prediction
+        # 1. get coarse prediction
         # match_ids: [bs, l, 2]
         i_ids, j_ids = match_ids[0][:, 0], match_ids[0][:, 1]
 
-        # 3. compute gt
+        # 2. compute gt
         scale = scale * scale1[0]
-        # `expec_f_gt` might exceed the window, i.e. abs(*) > 1, which would be filtered later
-        # w_pt0_i: (1, 6400, 2) pt1_i: (1, 6400, 2) b_ids: (6400,)
-        # expec_f_gt = (w_pt0_i[b_ids, i_ids] - pt1_i[b_ids, j_ids]) / scale / radius  # [M, 2]
         expec_f_gt = (ops.gather(w_pt0_i, i_ids, axis=1).squeeze(0) - ops.gather(pt1_i, j_ids, axis=1).squeeze(0)) / scale / radius
         return ops.stop_gradient(expec_f_gt)
 
@@ -94,6 +91,7 @@ class LoFTR(nn.Cell):
         # padding mask, 0 for pad area
         mask_c0_flat, mask_c1_flat = mask_c0.flatten(start_dim=-2), mask_c1.flatten(start_dim=-2)  # (bs, c, hw)
         feat_c0, feat_c1 = self.loftr_coarse(feat_c0, feat_c1, mask_c0_flat, mask_c1_flat)
+
         # Step3: match coarse-level
         match_ids, match_masks, match_conf, match_kpts_c0, match_kpts_c1, conf_matrix = self.coarse_matching(feat_c0,
                                                                                                             feat_c1,

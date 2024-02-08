@@ -93,9 +93,9 @@ def read_megadepth_gray(path, resize=None, df=None, padding=False, augment_fn=No
         padding (bool): If set to 'True', zero-pad resized images to squared size.
         augment_fn (callable, optional): augments images with pre-defined visual effects
     Returns:
-        image (torch.tensor): (1, h, w)
-        mask (torch.tensor): (h, w)
-        scale (torch.tensor): [w/w_new, h/h_new]        
+        image (ms.tensor): (1, h, w)
+        mask (ms.tensor): (h, w)
+        scale (ms.tensor): [w/w_new, h/h_new]
     """
     # read image
     image = imread_gray(path, augment_fn, client=MEGADEPTH_CLIENT)
@@ -136,9 +136,9 @@ def read_scannet_gray(path, resize=(640, 480), augment_fn=None):
         resize (tuple): align image to depthmap, in (w, h).
         augment_fn (callable, optional): augments images with pre-defined visual effects
     Returns:
-        image (torch.tensor): (1, h, w)
-        mask (torch.tensor): (h, w)
-        scale (torch.tensor): [w/w_new, h/h_new]        
+        image (ms.tensor): (1, h, w)
+        mask (ms.tensor): (h, w)
+        scale (ms.tensor): [w/w_new, h/h_new]
     """
     # read and resize image
     image = imread_gray(path, augment_fn)

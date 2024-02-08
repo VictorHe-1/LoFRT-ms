@@ -35,10 +35,10 @@ class LoFTREncoderLayer(nn.Cell):
     def construct(self, x, source, x_mask=None, source_mask=None):
         """
         Args:
-            x (torch.Tensor): [bs, h0w0, c]
-            source (torch.Tensor): [bs, h1w1, c]
-            x_mask (torch.Tensor): [bs, h0w0] (optional)
-            source_mask (torch.Tensor): [bs, h1w1] (optional)
+            x (ms.Tensor): [bs, h0w0, c]
+            source (ms.Tensor): [bs, h1w1, c]
+            x_mask (ms.Tensor): [bs, h0w0] (optional)
+            source_mask (ms.Tensor): [bs, h1w1] (optional)
         """
         bs = x.shape[0]
         query, key, value = x, source, source
@@ -80,10 +80,10 @@ class LocalFeatureTransformer(nn.Cell):
     def construct(self, feat0, feat1, mask0=None, mask1=None):
         """
         Args:
-            feat0 (torch.Tensor): [N, L, C]
-            feat1 (torch.Tensor): [N, S, C]
-            mask0 (torch.Tensor): [N, L] (optional)
-            mask1 (torch.Tensor): [N, S] (optional)
+            feat0 (ms.Tensor): [N, L, C]
+            feat1 (ms.Tensor): [N, S, C]
+            mask0 (ms.Tensor): [N, L] (optional)
+            mask1 (ms.Tensor): [N, S] (optional)
         """
 
         assert self.d_model == feat0.shape[2], "the feature number of src and transformer must be equal"

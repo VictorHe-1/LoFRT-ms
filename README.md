@@ -1,5 +1,5 @@
 # LoFTR-ms
-LoFTR implemented with mindspore framework
+LoFTR implemented using MindSpore framework
 
 ## Preprocessing Dataset
 1. Convert NPZ files for training:

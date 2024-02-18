@@ -3,15 +3,9 @@ import math
 import bisect
 import logging
 from os import path as osp
-from collections import abc
 
 from tqdm import tqdm
-from pathlib import Path
 from joblib import Parallel, delayed
-from mindspore.dataset import (
-    DistributedSampler,
-    RandomSampler
-)
 from mindspore.communication import get_group_size, get_rank
 
 from src.utils.dataloader import get_local_split
@@ -21,12 +15,6 @@ from src.datasets.scannet import ScanNetDataset
 from src.datasets.numpy_sampler import RandomConcatSampler
 
 logger = logging.getLogger(__name__)
-
-'''
-Note that: we don't use RandomConcatSampler here
-because the RandomConcatSampler samples a subset of a ConcatDataset every epoch.
-Here we use the full dataset for every epoch.
-'''
 
 
 class ConcatDataset:
